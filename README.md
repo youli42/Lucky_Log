@@ -14,7 +14,9 @@
 - 分栏导航：左侧模块分类（总览 / Web / System / Docker / Cron / DDNS / SSL / WebTerminal / Rclone / FileBrowser / WOL 等），进入后查看对应内容
 - **总览大屏**：KPI 卡片（日志总量 / 今日新增 / 活跃服务 / Web 访问总数 / 采集状态）+ 模块分布 / 时间趋势 / Web 访问趋势 / 服务分布 / 最近日志实时流
 - **Web 访问分析**：访问 IP 排行、设备型号、访问来源类型（设备类型 + Host 分组）、浏览器分布、访问路径、操作系统统计、访问趋势，全部图表化呈现；明细支持筛选 / 原始 JSON 展开 / 导出
-- **IP 归属地**：ip2region 离线库，IP 排行附归属地，可按省份分布统计
+- **完整信息展示（不臃肿）**：表格精简列 + IP 悬停 Tooltip（完整归属地）+ 行点击右侧详情抽屉（国家/省/市/ISP、浏览器与 OS 版本、设备品牌型号、原始 UA/JSON）+ ⚙ 列显隐配置（localStorage 持久化）
+- **IP 归属地**：ip2region 离线库，国家/省/市/ISP 完整字段，可按省份分布统计
+- **IP 流量 / 连接统计**：采集 accessdetail 实时快照（Connections / TrafficIn / TrafficOut / LastAccess），IP 排行附流量与连接数
 - 实时模式（WebSocket 推送）与手动模式（手动刷新按钮）
 - 按模块 / 服务 / 时间范围 / 关键词过滤；自动去重（时间+内容 / 内容 / 关闭）
 - CSV / JSON 导出；SQLite 本地存储，可配置自动清理
@@ -39,8 +41,8 @@ Lucky_Log/
 │   ├── lucky_client.py# Lucky API 客户端（鉴权/重试/分页）
 │   ├── access_parser.py # Web 访问日志解析（ExtInfo + UA）
 │   ├── geoip.py       # ip2region 归属地查询（降级容错）
-│   ├── collector.py   # 日志采集器（后台任务）
-│   ├── db.py          # SQLite 访问层（logs + access_logs）
+│   ├── collector.py   # 日志采集器（后台任务，含 accessdetail 流量采集）
+│   ├── db.py          # SQLite 访问层（logs + access_logs + ip_traffic）
 │   └── routes/        # API 路由（meta / logs / access / stream）
 ├── frontend/          # Vue 3 + Vite 前端源码
 │   ├── index.html  vite.config.js  package.json

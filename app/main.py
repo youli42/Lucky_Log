@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .collector import Collector
 from .config import ROOT_DIR, load_config
 from .db import Database
-from .routes import logs, meta, stream
+from .routes import access, logs, meta, stream
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +45,12 @@ app = FastAPI(title="Lucky Log Viewer", lifespan=lifespan)
 
 app.include_router(meta.router)
 app.include_router(logs.router)
+app.include_router(access.router)
 app.include_router(stream.router)
 
 _static_dir = ROOT_DIR / "static"
-if _static_dir.exists():
+_dist_dir = ROOT_DIR / "static" / "dist"
+if _dist_dir.exists():
+    app.mount("/", StaticFiles(directory=str(_dist_dir), html=True), name="static")
+elif _static_dir.exists():
     app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")

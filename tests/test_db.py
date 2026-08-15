@@ -9,10 +9,10 @@ BASE = 1786820400  # 2026/08/16 03:00:00 (本地时区)
 
 
 def _row(instance="inst1", module="docker", ts_text="2026/08/16 03:00:00",
-         content="hello", ts_epoch=BASE, rule_key="", rule_name=""):
+         content="hello", ts_epoch=BASE, rule_key="", rule_name="", sub_key="", sub_name=""):
     return {
         "instance": instance, "module": module, "rule_key": rule_key,
-        "rule_name": rule_name, "sub_key": "", "sub_name": "",
+        "rule_name": rule_name, "sub_key": sub_key, "sub_name": sub_name,
         "ts_epoch": ts_epoch, "ts_text": ts_text, "content": content,
         "raw_json": json.dumps({"LogContent": content, "LogTime": ts_text}),
         "fetched_at": BASE,

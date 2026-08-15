@@ -1,0 +1,34 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171e2e;
+  --panel2: #1e2740;
+  --border: #2a3550;
+  --text: #dce3f0;
+  --muted: #8494b5;
+  --accent: #4f8cff;
+  --green: #3ddc84;
+  --red: #ff5c5c;
+  --yellow: #f5c542;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; font-size: 13px;
+}
+#app { height: 100vh; display: flex; flex-direction: column; }
+button, select, input {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-size: 12px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+select:focus, input:focus, button:focus { outline: 1px solid var(--accent); }
+.tag {
+  display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px;
+  background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+}
+.empty { padding: 48px; text-align: center; color: var(--muted); }
+.loading { opacity: .55; pointer-events: none; }
+a { color: var(--accent); text-decoration: none; }

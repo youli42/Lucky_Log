@@ -29,7 +29,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 
 # 初始化数据库（--geoip 时同时下载 ip2region.xdb）
-python -m app.init_db
+python -m app.init_db --geoip
 
 # 测试（后端）
 python -m pytest tests/ -v
@@ -45,8 +45,8 @@ Lucky_Log/
 │   ├── lucky_client.py# Lucky API 客户端（鉴权/重试/分页）
 │   ├── access_parser.py # Web 访问日志解析（ExtInfo + UA → browser/os/device）
 │   ├── geoip.py       # ip2region 归属地查询（懒加载，缺库/失败降级）
-│   ├── collector.py   # 日志采集器（后台任务）
-│   ├── db.py          # SQLite 访问层（logs + access_logs）
+│   ├── collector.py   # 日志采集器（后台任务，含 accessdetail 流量采集）
+│   ├── db.py          # SQLite 访问层（logs + access_logs + ip_traffic）
 │   └── routes/        # API 路由（meta / logs / access / stream）
 ├── frontend/          # Vue 3 + Vite 前端源码
 │   ├── index.html  vite.config.js  package.json
@@ -69,4 +69,6 @@ Lucky_Log/
 - Lucky API 使用自签名证书：httpx 需 `verify=False`，并抑制告警。
 - Lucky API 无服务端时间过滤：日志增量需客户端游标管理。
 - 目标对高并发有限制：采集需节流 + 重试。
-- Web 访问日志在**子代理层**（`/api/webservice/{ruleKey}/{subKey}/logs`），`LogContent` 为内嵌 JSON（`ExtInfo`）；规则层为运行日志（如 TLS 错误）。
+- Web 访问日志在**子代理层**（`/api/webservice/{ruleKey}/{subKey}/logs`），`LogContent` 为内嵌 JSON（`ExtInfo`，含 ClientIP/Host/Method/URL/UserAgent）；规则层为运行日志（如 TLS 错误）。子代理层日志采集后解析入 `access_logs` 表，用于 Web 访问分析（IP/浏览器/OS/设备/路径/归属地）。
+- IP 流量/连接统计来自 `accessdetail` 端点（实时快照：Connections/TrafficIn/TrafficOut/LastAccess），采集器 30s 节流 UPSERT 入 `ip_traffic` 表；与 `access_logs` 的逐请求计数互补，非历史数据。
+- 完整归属地（国家/省/市/ISP）与完整 UA 信息（浏览器/OS/设备 family+version+brand+model）在**查询时富化**（geoip + user-agents），不改 `access_logs` 表结构。

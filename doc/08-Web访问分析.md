@@ -1,0 +1,100 @@
+# 08 - Web 访问分析
+
+## 数据来源
+
+子代理层日志 `/api/webservice/{ruleKey}/{subKey}/logs`，`LogContent` 为内嵌 JSON（`ExtInfo`）：
+
+```json
+{"ExtInfo":{"ClientIP":"114.217.40.200","Host":"omo.youlid.dpdns.org",
+  "Method":"GET","URL":"/favicon.ico",
+  "UserAgent":"Mozilla/5.0 (Linux; Android 11; V2068A) ... VivoBrowser/30.3.0.0"}}
+```
+
+采集器对每条子代理层日志调用 `access_parser.parse_access_row`：
+1. `LogContent` → JSON → `ExtInfo`；缺 `ClientIP` 则跳过（非访问日志）。
+2. `UserAgent` 用 `user-agents` 解析 → `browser / os / device / device_type`。
+3. `device_type` 分类：`bot / mobile / tablet / desktop / unknown`（含 UA 关键词兜底）。
+4. 结构化行写入 `access_logs` 表。
+
+> 局限：日志无 `Referer` 与状态码，因此「访问来源类型」按**设备类型 + Host 域名**分组，而非搜索引擎/外链来源。
+
+## 表结构（access_logs）
+
+| 字段 | 说明 |
+|---|---|
+| instance / rule_key / rule_name / sub_key / sub_name | 实例与归属服务 |
+| host | 访问域名（如 omo.youlid.dpdns.org） |
+| ts_epoch / ts_text | 访问时间 |
+| client_ip | 访问 IP |
+| method / path | 请求方法 / 路径 |
+| ua | 原始 UserAgent |
+| browser / os / device / device_type | UA 解析结果 |
+
+去重：唯一索引 `(instance, sub_key, ts_text, client_ip, method, path)`。
+
+## IP 归属地
+
+`app/geoip.py` 封装 ip2region（离线 xdb，`data/ip2region.xdb`，`init_db --geoip` 下载）：
+
+- 懒加载 + 整库缓存（`new_with_buffer`，并发安全）。
+- 结果 `中国|广东省|广州市|电信` → `{country, province, city, isp}`。
+- 私有/保留地址 → `内网/保留`；缺库/查询失败 → `未知`（整体功能降级不报错）。
+- 展示简写 `geo_short(ip)`：`省·市`（国外显国家），如 `广东·广州` / `澳大利亚`。
+
+## IP 流量 / 连接（accessdetail → ip_traffic）
+
+- 数据源：`/api/webservice/{ruleKey}/{subKey}/accessdetail`（实时快照，`Connections / TrafficIn / TrafficOut / LastAccess`）。
+- 采集器 30s 节流 UPSERT 入 `ip_traffic`（PK: instance, sub_key, client_ip）；详见 doc/05。
+- 展示：IP 排行/明细/详情抽屉附 `connections / traffic_in / traffic_out / last_access`；新增 KPI「总流量 / 连接总数」。
+- 前端标注"实时快照，30s 刷新"；数据未到显示 `—`。
+
+## 查询时富化（不改 access_logs 表）
+
+| 字段 | 来源 |
+|---|---|
+| country / province / city / isp | `geoip.query(ip)` |
+| geo_short | 省·市 / 国家 简写 |
+| browser_version / os_version | `user_agents`：`browser.version_string` / `os.version_string` |
+| device_brand / device_model | `user_agents`：`device.brand` / `device.model` |
+| connections / traffic_in / traffic_out / last_access | LEFT JOIN `ip_traffic` |
+
+> 明细每页 100 行 ≈ geoip + UA 解析各 100 次（内存缓存），<30ms。
+
+## 统计口径（/api/access/stats）
+
+| 返回项 | 口径 |
+|---|---|
+| total / unique_ips / unique_paths | 满足筛选的访问总数 / 独立 IP / 独立路径 |
+| traffic_total / conn_total | 命中 IP 的流量合计 / 连接合计（来自 ip_traffic） |
+| timeline | 按 hour/day 桶聚合（`(ts_epoch/step)*step`） |
+| top_ips | 访问次数 Top15，附完整归属地 + 流量/连接；用 Top300 IP 聚合出 region_dist 地区分布 |
+| top_paths / browsers / os / devices / device_types / methods / hosts | 对应字段分组计数 |
+
+筛选参数：`instance / rule / sub / host / from_epoch / to_epoch / search`。
+
+## API 清单
+
+- `GET /api/access/stats` — 聚合统计（含地区分布、流量合计）。
+- `GET /api/access/logs` — 明细分页（每行附完整归属地 + UA 版本 + 流量）。
+- `GET /api/access/export?format=csv|json` — 全字段导出（含归属地 4 项、UA 版本、流量 4 项）。
+
+## 前端图表映射
+
+| 需求 | 图表 | 数据 |
+|---|---|---|
+| 访问 IP | 横向条形 Top | top_ips（IP + 归属地 + 流量） |
+| 设备型号 | 柱状 | devices |
+| 访问来源类型 | 环形（设备）+ 柱状（域名） | device_types / hosts |
+| 浏览器分布 | 环形 | browsers |
+| 访问路径 | 横向条形 Top | top_paths |
+| 访问 IP 排行 | 条形 + 明细表 | top_ips / ip_traffic |
+| 操作系统统计 | 环形 | os |
+| 访问趋势 | 折线 | timeline |
+| 地区分布 | 环形 | region_dist |
+
+## 明细完整信息展示
+
+- 默认精简列：时间 | 归属地(省·市) | IP | 方法 | 路径 | 客户端(浏览器·OS)。
+- IP 悬停 Tooltip：完整归属地（国家/省/市/ISP）+ 连接数/流量入出/最后访问。
+- 行点击右侧详情抽屉：请求 / 访问者（含流量）/ 客户端（浏览器与 OS 版本、设备品牌型号、原始 UA）/ 原始 JSON。
+- ⚙ 列显隐配置（localStorage）：17+ 可开关列。

@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from typing import Any
 
+from .access_parser import parse_access_row
 from .config import AppConfig, InstanceConfig
 from .db import Database
 from .lucky_client import LuckyClient, LuckyError
@@ -45,6 +46,7 @@ SINGLE_SOURCES: dict[str, str] = {
 
 # webservice 按规则源（游标 LogTime）
 BY_RULE_SOURCE = "/api/webservice/{ruleKey}/httpserver/logs"
+SUB_RULE_SOURCE = "/api/webservice/{ruleKey}/{subKey}/logs"
 
 
 def parse_ts_text(ts_text: Any) -> int:
@@ -202,17 +204,21 @@ class Collector:
             else:
                 logger.debug("[%s] 忽略未知模块 %s", inst.name, module)
 
-    # ---------- 单源采集 ----------
+    # ---------- 统一分页采集 ----------
 
-    async def _poll_single(self, inst: InstanceConfig, module: str, path: str) -> None:
-        if module == "system":
-            await self._poll_system(inst)
-            return
-        cursor = await self.db.get_cursor(inst.name, module, "", "")
+    async def _poll_unified(
+        self, inst: InstanceConfig, module: str, path: str,
+        *,
+        rule_key: str = "", rule_name: str = "", sub_key: str = "", sub_name: str = "",
+        cursor_ns: bool = False, build_access: bool = False,
+    ) -> tuple[int, int]:
+        """按 LogTime（或系统日志纳秒）游标翻页采集，写 logs（+可选 access_logs）。"""
+        cursor = await self.db.get_cursor(inst.name, module, rule_key, sub_key)
+        old = cursor["last_ns"] if cursor_ns else cursor["last_ts"]
         client = self._client(inst)
-        old_ts = cursor["last_ts"]
         new_rows: list[dict[str, Any]] = []
-        newest_ts = old_ts
+        access_rows: list[dict[str, Any]] = []
+        newest = old
         try:
             page = 1
             total = None
@@ -223,135 +229,94 @@ class Collector:
                 logs = data["logs"]
                 if not logs:
                     break
-                page_rows: list[dict[str, Any]] = []
+                page_ts: list[int] = []
                 for rec in logs:
-                    row = normalize_record(inst.name, module, rec)
-                    if row and row["ts_epoch"] >= old_ts:
-                        page_rows.append(row)
-                        if row["ts_epoch"] > newest_ts:
-                            newest_ts = row["ts_epoch"]
-                new_rows.extend(page_rows)
-                oldest_in_page = min(
-                    (parse_ts_text(r.get("LogTime")) for r in logs if r.get("LogTime")), default=0
-                )
-                if oldest_in_page < old_ts:
-                    break
-                if page * PAGE_SIZE >= total:
-                    break
-                page += 1
-                await asyncio.sleep(INTER_SOURCE_DELAY)
-            inserted = await self.db.insert_logs(new_rows)
-            await self.db.save_cursor(
-                inst.name, module, "", "",
-                last_ts=newest_ts, last_total=total or 0,
-            )
-            if inserted:
-                self.broadcast(new_rows)
-            logger.debug("[%s] %s 新增 %d 条", inst.name, module, inserted)
-        except LuckyError as e:
-            await self.db.save_cursor(inst.name, module, "", "", error=str(e))
-            logger.warning("[%s] %s 采集错误: %s", inst.name, module, e)
-
-    # ---------- 系统日志（纳秒游标） ----------
-
-    async def _poll_system(self, inst: InstanceConfig) -> None:
-        cursor = await self.db.get_cursor(inst.name, "system", "", "")
-        old_ns = cursor["last_ns"]
-        new_rows: list[dict[str, Any]] = []
-        newest_ns = old_ns
-        try:
-            page = 1
-            total = None
-            while page <= MAX_PAGES_PER_POLL:
-                data = await self._client(inst).get_log_page("/api/logs", page, PAGE_SIZE)
-                if total is None:
-                    total = data["total"]
-                logs = data["logs"]
-                if not logs:
-                    break
-                page_rows: list[dict[str, Any]] = []
-                for rec in logs:
-                    ns = rec.get("timestamp")
-                    if ns is None:
-                        continue
-                    ns = int(ns)
-                    if ns < old_ns:
-                        continue
-                    row = normalize_system_record(inst.name, rec)
+                    if cursor_ns:
+                        try:
+                            ts = int(rec.get("timestamp") or 0)
+                        except (ValueError, TypeError):
+                            ts = 0
+                        if ts < old:
+                            continue
+                        row = normalize_system_record(inst.name, rec)
+                        page_ts.append(ts)
+                        if ts > newest:
+                            newest = ts
+                    else:
+                        ts = parse_ts_text(rec.get("LogTime"))
+                        if ts < old:
+                            continue
+                        row = normalize_record(
+                            inst.name, module, rec, rule_key, rule_name, sub_key, sub_name
+                        )
+                        page_ts.append(ts)
+                        if ts > newest:
+                            newest = ts
                     if row:
-                        page_rows.append(row)
-                        if ns > newest_ns:
-                            newest_ns = ns
-                new_rows.extend(page_rows)
-                oldest_in_page = min((int(r.get("timestamp") or 0) for r in logs), default=0)
-                if oldest_in_page < old_ns:
+                        new_rows.append(row)
+                    if build_access:
+                        arow = parse_access_row(
+                            inst.name, rec,
+                            rule_key=rule_key, rule_name=rule_name,
+                            sub_key=sub_key, sub_name=sub_name,
+                        )
+                        if arow:
+                            access_rows.append(arow)
+                oldest_in_page = min(page_ts, default=0)
+                if oldest_in_page < old:
                     break
                 if page * PAGE_SIZE >= total:
                     break
                 page += 1
                 await asyncio.sleep(INTER_SOURCE_DELAY)
             inserted = await self.db.insert_logs(new_rows)
+            inserted_access = await self.db.insert_access_logs(access_rows)
             await self.db.save_cursor(
-                inst.name, "system", "", "",
-                last_ns=newest_ns, last_ts=0, last_total=total or 0,
+                inst.name, module, rule_key, sub_key,
+                last_ts=None if cursor_ns else newest,
+                last_ns=newest if cursor_ns else None,
+                last_total=total or 0,
             )
             if inserted:
                 self.broadcast(new_rows)
+            if inserted_access or inserted:
+                logger.debug(
+                    "[%s] %s/%s 新增日志 %d 访问 %d", inst.name, module, sub_key or rule_key, inserted, inserted_access
+                )
+            return inserted, inserted_access
         except LuckyError as e:
-            await self.db.save_cursor(inst.name, "system", "", "", error=str(e))
-            logger.warning("[%s] system 采集错误: %s", inst.name, e)
+            await self.db.save_cursor(inst.name, module, rule_key, sub_key, error=str(e))
+            logger.warning("[%s] %s/%s 采集错误: %s", inst.name, module, sub_key or rule_key, e)
+            return 0, 0
 
-    # ---------- 按规则（服务）采集 ----------
+    async def _poll_single(self, inst: InstanceConfig, module: str, path: str) -> None:
+        if module == "system":
+            await self._poll_unified(inst, "system", path, cursor_ns=True)
+            return
+        await self._poll_unified(inst, module, path)
+
+    # ---------- 按规则 + 子代理采集 ----------
 
     async def _poll_by_rule(self, inst: InstanceConfig) -> None:
         tree = await self._ensure_tree(inst)
-        client = self._client(inst)
         for rule in tree:
             rule_key = rule.get("Key") or ""
             rule_name = rule.get("Name") or ""
-            path = BY_RULE_SOURCE.format(ruleKey=rule_key)
-            cursor = await self.db.get_cursor(inst.name, "webservice", rule_key, "")
-            old_ts = cursor["last_ts"]
-            new_rows: list[dict[str, Any]] = []
-            newest_ts = old_ts
-            try:
-                page = 1
-                total = None
-                while page <= MAX_PAGES_PER_POLL:
-                    data = await client.get_log_page(path, page, PAGE_SIZE)
-                    if total is None:
-                        total = data["total"]
-                    logs = data["logs"]
-                    if not logs:
-                        break
-                    page_rows: list[dict[str, Any]] = []
-                    for rec in logs:
-                        row = normalize_record(inst.name, "webservice", rec, rule_key, rule_name)
-                        if row and row["ts_epoch"] >= old_ts:
-                            page_rows.append(row)
-                            if row["ts_epoch"] > newest_ts:
-                                newest_ts = row["ts_epoch"]
-                    new_rows.extend(page_rows)
-                    oldest_in_page = min(
-                        (parse_ts_text(r.get("LogTime")) for r in logs if r.get("LogTime")), default=0
-                    )
-                    if oldest_in_page < old_ts:
-                        break
-                    if page * PAGE_SIZE >= total:
-                        break
-                    page += 1
-                    await asyncio.sleep(INTER_SOURCE_DELAY)
-                inserted = await self.db.insert_logs(new_rows)
-                await self.db.save_cursor(
-                    inst.name, "webservice", rule_key, "",
-                    last_ts=newest_ts, last_total=total or 0,
-                )
-                if inserted:
-                    self.broadcast(new_rows)
-            except LuckyError as e:
-                await self.db.save_cursor(inst.name, "webservice", rule_key, "", error=str(e))
-                logger.warning("[%s] %s 采集错误: %s", inst.name, rule_name, e)
+            await self._poll_unified(
+                inst, "webservice", BY_RULE_SOURCE.format(ruleKey=rule_key),
+                rule_key=rule_key, rule_name=rule_name,
+            )
             await asyncio.sleep(INTER_SOURCE_DELAY)
+            for sub in rule.get("SubRuleList") or []:
+                sub_key = sub.get("Key") or ""
+                sub_name = sub.get("Name") or ""
+                await self._poll_unified(
+                    inst, "webservice", SUB_RULE_SOURCE.format(ruleKey=rule_key, subKey=sub_key),
+                    rule_key=rule_key, rule_name=rule_name,
+                    sub_key=sub_key, sub_name=sub_name,
+                    build_access=True,
+                )
+                await asyncio.sleep(INTER_SOURCE_DELAY)
 
     # ---------- 广播（WebSocket 实时推送） ----------
 

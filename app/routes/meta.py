@@ -32,6 +32,7 @@ async def list_instances(request: Request):
             "base": inst.base,
             "https": inst.https,
             "enabled": inst.enabled,
+            "modules": inst.modules,
             "last_collect": None,
             "last_error": None,
             "total": 0,
@@ -44,6 +45,36 @@ async def list_instances(request: Request):
         info["total"] = stats["total"]
         out.append(info)
     return {"instances": out}
+
+
+@router.get("/overview")
+async def overview(
+    request: Request,
+    instance: Optional[str] = None,
+    from_epoch: Optional[int] = None,
+    to_epoch: Optional[int] = None,
+):
+    db = _get_db(request)
+    by_module = await db.stats_by_module(instance, from_epoch, to_epoch)
+    timeline = await db.stats_timeline(instance, None, from_epoch, to_epoch, "hour")
+    by_service = await db.stats_by_service(instance, from_epoch, to_epoch)
+    access_total = 0
+    total_logs = 0
+    if instance:
+        total_logs = (await db.instance_stats(instance))["total"]
+        access_total = await db.access_instance_total(instance)
+    else:
+        for inst in request.app.state.config.enabled_instances():
+            total_logs += (await db.instance_stats(inst.name))["total"]
+            access_total += await db.access_instance_total(inst.name)
+    return {
+        "total_logs": total_logs,
+        "access_total": access_total,
+        "active_services": len(by_service),
+        "by_module": by_module,
+        "timeline": timeline,
+        "by_service": by_service,
+    }
 
 
 @router.get("/services")

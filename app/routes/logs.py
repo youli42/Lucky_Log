@@ -30,18 +30,20 @@ async def query_logs(
     dedup: str = "time_content",
     page: int = 1,
     page_size: int = 200,
+    level: Optional[str] = None,
 ):
     db = _get_db(request)
     return await db.query_logs(
         instance=instance,
         module=module,
-        rule_key=service,
         from_epoch=from_epoch,
         to_epoch=to_epoch,
         search=search,
         dedup=dedup,
         page=page,
         page_size=page_size,
+        service=service,
+        level=level,
     )
 
 
@@ -66,7 +68,7 @@ async def export_logs(
                 "content": r["content"],
             }
             async for r in db.export_rows(
-                instance, module, from_epoch, to_epoch, search, dedup, limit
+                instance, module, from_epoch, to_epoch, search, dedup, limit, service=service
             )
         ]
         return JSONResponse({"items": rows})
@@ -75,7 +77,7 @@ async def export_logs(
     writer = csv.writer(buf)
     writer.writerow(["time", "module", "rule_name", "sub_name", "content"])
     async for r in db.export_rows(
-        instance, module, from_epoch, to_epoch, search, dedup, limit
+        instance, module, from_epoch, to_epoch, search, dedup, limit, service=service
     ):
         writer.writerow(
             [r["ts_text"], r["module"], r["rule_name"], r["sub_name"], r["content"]]
