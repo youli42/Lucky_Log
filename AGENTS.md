@@ -13,7 +13,8 @@
 
 - 后端：Python 3.10+，FastAPI + uvicorn + httpx + aiosqlite
 - 存储：SQLite（本地单文件）
-- 前端：单页 HTML + 原生 JS + Chart.js（vendor 本地化）
+- 前端：Vue 3 + Vite + Chart.js（构建产物由后端托管）
+- 辅助：user-agents（UA 解析）、ip2region（离线 IP 归属地，`data/ip2region.xdb`）
 
 ## 常用命令
 
@@ -21,10 +22,16 @@
 # 启动后端（开发模式，自动重载）
 python -m uvicorn app.main:app --reload --port 8666
 
-# 初始化数据库
+# 前端开发（Vite dev server，5173，/api /ws 代理到 8666）
+cd frontend && npm run dev
+
+# 前端构建（产物输出到 static/dist）
+cd frontend && npm run build
+
+# 初始化数据库（--geoip 时同时下载 ip2region.xdb）
 python -m app.init_db
 
-# 测试
+# 测试（后端）
 python -m pytest tests/ -v
 ```
 
@@ -36,14 +43,20 @@ Lucky_Log/
 │   ├── main.py        # FastAPI 入口
 │   ├── config.py      # 配置加载
 │   ├── lucky_client.py# Lucky API 客户端（鉴权/重试/分页）
+│   ├── access_parser.py # Web 访问日志解析（ExtInfo + UA → browser/os/device）
+│   ├── geoip.py       # ip2region 归属地查询（懒加载，缺库/失败降级）
 │   ├── collector.py   # 日志采集器（后台任务）
-│   ├── db.py          # SQLite 访问层
-│   └── routes/        # API 路由
-├── static/            # 前端页面
-│   └── index.html
+│   ├── db.py          # SQLite 访问层（logs + access_logs）
+│   └── routes/        # API 路由（meta / logs / access / stream）
+├── frontend/          # Vue 3 + Vite 前端源码
+│   ├── index.html  vite.config.js  package.json
+│   └── src/           # 组件 / 视图 / store / api
+├── static/            # 后端托管前端构建产物（static/dist）
 ├── doc/               # 分类文档
-├── config.json        # 运行配置（多实例）
-└── data/              # SQLite 数据库文件
+├── scripts/           # 开发辅助脚本
+├── config.json        # 运行配置（多实例，含 OpenToken，不入库）
+├── requirements.txt
+└── data/              # SQLite 数据库 + ip2region.xdb（运行时生成/下载）
 ```
 
 ## 目标实例（开发期默认）
@@ -56,3 +69,4 @@ Lucky_Log/
 - Lucky API 使用自签名证书：httpx 需 `verify=False`，并抑制告警。
 - Lucky API 无服务端时间过滤：日志增量需客户端游标管理。
 - 目标对高并发有限制：采集需节流 + 重试。
+- Web 访问日志在**子代理层**（`/api/webservice/{ruleKey}/{subKey}/logs`），`LogContent` 为内嵌 JSON（`ExtInfo`）；规则层为运行日志（如 TLS 错误）。
