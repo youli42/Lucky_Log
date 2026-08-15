@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { api } from '../api'
+import { api, esc } from '../api'
 import { store, onRealtime } from '../store'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
 import KpiCard from '../components/KpiCard.vue'
@@ -65,6 +65,13 @@ function bucketLabel(bucket) {
   return `${String(d.getHours()).padStart(2, '0')}:00`
 }
 
+const logColDefs = [
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text) },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>` },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—') },
+  { key: 'content', label: '内容', render: (r) => esc(r.content) },
+]
+
 async function loadAll() {
   loading.value = true
   try {
@@ -121,7 +128,7 @@ onBeforeUnmount(() => off && off())
     <div class="card logs-card">
       <h3>最近日志 <span class="total">共 {{ logTotal }} 条</span></h3>
       <div class="log-table">
-        <LogTable v-if="logs.length" :items="logs" />
+        <LogTable v-if="logs.length" :rows="logs" :column-defs="logColDefs" row-key="id" expand-raw />
         <EmptyState v-else message="暂无日志" />
       </div>
     </div>

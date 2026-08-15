@@ -1,12 +1,13 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { api, qp } from '../api'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
+import DetailDrawer from '../components/DetailDrawer.vue'
 
 const tab = ref('analytics')
 const rule = ref('')
@@ -25,6 +26,102 @@ const detail = ref({ total: 0, items: [] })
 const runtime = ref({ total: 0, items: [] })
 const runtimePage = ref(1)
 const loading = ref(false)
+const selected = ref(null)
+const showCols = ref(false)
+
+function fmtBytes(b) {
+  if (b == null) return '—'
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
+  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
+  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
+  return b + ' B'
+}
+
+// ---------- 列配置 ----------
+const ALL_COLUMNS = [
+  { key: 'time', label: '时间', on: true },
+  { key: 'geo', label: '归属地(省·市)', on: true },
+  { key: 'ip', label: 'IP', on: true },
+  { key: 'method', label: '方法', on: true },
+  { key: 'path', label: '路径', on: true },
+  { key: 'client', label: '客户端(浏览器·OS)', on: true },
+  { key: 'traffic', label: '流量(入/出)', on: true },
+  { key: 'conn', label: '连接', on: false },
+  { key: 'last_access', label: '最后访问', on: false },
+  { key: 'host', label: '域名', on: false },
+  { key: 'country', label: '国家', on: false },
+  { key: 'province', label: '省份', on: false },
+  { key: 'city', label: '城市', on: false },
+  { key: 'isp', label: 'ISP', on: false },
+  { key: 'browser', label: '浏览器', on: false },
+  { key: 'browser_version', label: '浏览器版本', on: false },
+  { key: 'os', label: '操作系统', on: false },
+  { key: 'os_version', label: 'OS版本', on: false },
+  { key: 'device', label: '设备', on: false },
+  { key: 'device_brand', label: '设备品牌', on: false },
+  { key: 'device_model', label: '设备型号', on: false },
+  { key: 'ua', label: 'UA', on: false },
+]
+const cols = ref([])
+function loadCols() {
+  let saved = []
+  try { saved = JSON.parse(localStorage.getItem('lucky_access_cols') || '[]') } catch { /* ignore */ }
+  cols.value = ALL_COLUMNS.map((c) => ({
+    ...c,
+    on: saved.includes(c.key) ? true : c.on,
+  }))
+}
+function toggleCol(key) {
+  const c = cols.value.find((x) => x.key === key)
+  if (c) {
+    c.on = !c.on
+    localStorage.setItem('lucky_access_cols', JSON.stringify(cols.value.filter((x) => x.on).map((x) => x.key)))
+  }
+}
+
+const RENDER = {
+  time: { cls: 'ts', render: (r) => esc(r.ts_text) },
+  geo: { render: (r) => esc(r.geo_short) },
+  ip: { cls: 'mono', render: (r) => esc(r.client_ip) },
+  method: { render: (r) => `<span class="tag">${esc(r.method)}</span>` },
+  path: { cls: 'mono path', render: (r) => esc(r.path), title: (r) => r.path },
+  client: { render: (r) => `${esc(r.browser)}·${esc(r.os)}` },
+  traffic: { cls: 'mono', render: (r) => `${fmtBytes(r.traffic_in)} / ${fmtBytes(r.traffic_out)}` },
+  conn: { render: (r) => esc(r.connections) },
+  last_access: { render: (r) => (r.last_access ? fmtEpoch(r.last_access) : '—') },
+  host: { cls: 'mono', render: (r) => esc(r.host) },
+  country: { render: (r) => esc(r.country) },
+  province: { render: (r) => esc(r.province) },
+  city: { render: (r) => esc(r.city) },
+  isp: { render: (r) => esc(r.isp) },
+  browser: { render: (r) => esc(r.browser) },
+  browser_version: { render: (r) => esc(r.browser_version) },
+  os: { render: (r) => esc(r.os) },
+  os_version: { render: (r) => esc(r.os_version) },
+  device: { render: (r) => esc(r.device) },
+  device_brand: { render: (r) => esc(r.device_brand) },
+  device_model: { render: (r) => esc(r.device_model) },
+  ua: { cls: 'mono', render: (r) => esc(r.ua), title: (r) => r.ua },
+}
+
+const colDefs = computed(() =>
+  cols.value.filter((c) => c.on).map((c) => ({
+    key: c.key,
+    label: c.label,
+    cls: RENDER[c.key]?.cls,
+    title: RENDER[c.key]?.title,
+    render: RENDER[c.key]?.render || (() => ''),
+  })),
+)
+
+function rowTip(row) {
+  const geo = [row.country, row.province, row.city, row.isp].filter(Boolean).join(' · ') || '未知'
+  return `<div class="tip-title">${esc(row.client_ip)}</div>` +
+    `<div>${esc(geo)}</div>` +
+    `<div>请求 ${row.count != null ? row.count + ' 次 · ' : ''}连接 ${row.connections ?? '—'}</div>` +
+    `<div>流量 入 ${fmtBytes(row.traffic_in)} / 出 ${fmtBytes(row.traffic_out)}</div>` +
+    `<div>最后访问 ${row.last_access ? fmtEpoch(row.last_access) : '—'}</div>`
+}
 
 const accessParams = () => ({
   instance: store.instance,
@@ -72,8 +169,8 @@ async function loadRuntime() {
 const kpis = computed(() => [
   { title: '总访问', value: stats.value?.total ?? 0, sub: '访问日志条数', accent: 'var(--accent)' },
   { title: '独立 IP', value: stats.value?.unique_ips ?? 0, sub: '去重后访问 IP', accent: 'var(--green)' },
-  { title: '独立路径', value: stats.value?.unique_paths ?? 0, sub: '去重后访问路径', accent: 'var(--yellow)' },
-  { title: '域名', value: stats.value?.hosts?.length ?? 0, sub: '访问 Host 数', accent: 'var(--red)' },
+  { title: '总流量', value: fmtBytes((stats.value?.traffic?.traffic_in || 0) + (stats.value?.traffic?.traffic_out || 0)), sub: '出入合计 · 实时快照', accent: 'var(--yellow)' },
+  { title: '连接数', value: stats.value?.traffic?.connections ?? 0, sub: '当前连接 · 实时快照', accent: 'var(--red)' },
 ])
 
 const trendChart = computed(() => {
@@ -86,7 +183,7 @@ const trendChart = computed(() => {
 const ipChart = computed(() => {
   const rows = stats.value?.top_ips || []
   return {
-    labels: rows.map((r) => `${r.k}${r.region ? ' (' + r.region + ')' : ''}`),
+    labels: rows.map((r) => `${r.k}${r.geo_short ? ' (' + r.geo_short + ')' : ''}`),
     datasets: [{ label: '次数', data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }],
   }
 })
@@ -117,6 +214,18 @@ const methodChart = computed(() => {
   return { labels: rows.map((r) => r.name), datasets: [{ label: '次数', data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
 })
 
+// IP 排行明细表
+const ipRows = computed(() => (stats.value?.top_ips || []).map((r, i) => ({ id: r.k, rank: i + 1, client_ip: r.k, ...r })))
+const ipColDefs = [
+  { key: 'rank', label: '#', render: (r) => esc(r.rank) },
+  { key: 'ip', label: 'IP', cls: 'mono', render: (r) => esc(r.client_ip) },
+  { key: 'geo', label: '归属地', render: (r) => esc(r.geo_short) },
+  { key: 'count', label: '请求', render: (r) => esc(r.count) },
+  { key: 'conn', label: '连接', render: (r) => esc(r.connections) },
+  { key: 'traffic', label: '流量入/出', render: (r) => `${fmtBytes(r.traffic_in)} / ${fmtBytes(r.traffic_out)}` },
+  { key: 'last', label: '最后访问', render: (r) => (r.last_access ? fmtEpoch(r.last_access) : '—') },
+]
+
 function bucketLabel(bucket) {
   const d = new Date(bucket * 1000)
   return `${String(d.getHours()).padStart(2, '0')}:00`
@@ -129,7 +238,15 @@ function exportCsv() {
 const detailTotalPages = computed(() => Math.max(1, Math.ceil(detail.value.total / pageSize)))
 const runtimeTotalPages = computed(() => Math.max(1, Math.ceil(runtime.value.total / 100)))
 
+const runtimeColDefs = [
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text || '') },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module || '')}</span>` },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || '—') },
+  { key: 'content', label: '内容', render: (r) => esc(r.content || '') },
+]
+
 let off = null
+loadCols()
 onMounted(async () => {
   await loadServices()
   await Promise.all([loadStats(), loadDetail(), loadRuntime()])
@@ -144,6 +261,7 @@ onMounted(async () => {
 })
 watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime() })
 watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail() })
+onBeforeUnmount(() => off && off())
 </script>
 
 <template>
@@ -174,6 +292,7 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
       </select>
       <input v-model="search" placeholder="IP/路径关键词…" @keydown.enter="page = 1; loadStats()">
       <button @click="page = 1; loadStats()">查询</button>
+      <span class="hint">实时快照每 30s 刷新</span>
     </div>
 
     <!-- Tab 1: 访问分析 -->
@@ -193,6 +312,12 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
         <div class="card"><h3>域名 Host 分布</h3><div class="wrap"><ChartBox type="bar" :labels="hostChart.labels" :datasets="hostChart.datasets" :options="barOptions(true)" /></div></div>
         <div class="card"><h3>请求方法</h3><div class="wrap"><ChartBox type="bar" :labels="methodChart.labels" :datasets="methodChart.datasets" :options="barOptions()" /></div></div>
       </div>
+      <div class="card ip-rank">
+        <h3>IP 排行明细（点击行查看详情）</h3>
+        <div class="ip-table">
+          <LogTable :rows="ipRows" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id" @row-click="selected = $event" />
+        </div>
+      </div>
     </template>
 
     <!-- Tab 2: 访问明细 -->
@@ -203,11 +328,20 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
         <input v-model="detailPath" placeholder="路径包含…" @keydown.enter="page = 1; loadDetail()">
         <button @click="page = 1; loadDetail()">查询</button>
         <button @click="exportCsv()">导出 CSV</button>
+        <span class="colset-wrap">
+          <button @click="showCols = !showCols">列 ⚙</button>
+          <div v-if="showCols" class="colset">
+            <label v-for="c in cols" :key="c.key">
+              <input type="checkbox" :checked="c.on" @change="toggleCol(c.key)"> {{ c.label }}
+            </label>
+          </div>
+        </span>
+        <span class="hint">点击行查看完整详情</span>
       </div>
       <div class="card table-card">
         <LogTable
-          :items="detail.items"
-          :columns="['time', 'ip', 'method', 'path', 'ua', 'region', 'service']"
+          :rows="detail.items" :column-defs="colDefs" :row-tooltip="rowTip" row-key="id"
+          @row-click="selected = $event"
         />
         <EmptyState v-if="!detail.items.length" message="无匹配访问日志" />
       </div>
@@ -224,7 +358,7 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
     <!-- Tab 3: 运行日志 -->
     <template v-else>
       <div class="card table-card">
-        <LogTable v-if="runtime.items.length" :items="runtime.items" />
+        <LogTable v-if="runtime.items.length" :rows="runtime.items" :column-defs="runtimeColDefs" row-key="id" expand-raw />
         <EmptyState v-else message="该实例暂无 WebService 规则层运行日志" detail="如 TLS 握手错误等；通常只有少数服务存在" />
       </div>
       <div class="foot">
@@ -236,6 +370,8 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
         </div>
       </div>
     </template>
+
+    <DetailDrawer :item="selected" @close="selected = null" />
   </div>
 </template>
 
@@ -245,7 +381,8 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
 .tabs { display: flex; gap: 6px; }
 .tabs button { padding: 6px 14px; }
 .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.filters, .detail-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.filters, .detail-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.hint { color: var(--muted); font-size: 11px; }
 .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
@@ -254,6 +391,15 @@ watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail
 .span2 { grid-column: span 2; }
 .table-card { margin-bottom: 12px; }
 .table-card :deep(.table-wrap) { height: 460px; }
+.ip-rank { margin-top: 12px; }
+.ip-table :deep(.table-wrap) { height: 320px; }
 .foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
 .pager { display: flex; gap: 8px; align-items: center; }
+.colset-wrap { position: relative; }
+.colset {
+  position: absolute; top: 30px; right: 0; z-index: 100; width: 190px; max-height: 320px; overflow-y: auto;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+  display: grid; grid-template-columns: 1fr; gap: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.colset label { display: flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
 </style>

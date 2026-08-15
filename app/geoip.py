@@ -71,3 +71,16 @@ def province(ip: str) -> str:
     if r["country"]:
         return r["country"]
     return "未知"
+
+
+def geo_short(ip: str) -> str:
+    """表格用短标签：省·市（如 广东省·广州市），国外显国家。"""
+    r = query(ip)
+    if not r:
+        return "未知"
+    if r["province"]:
+        city = r["city"]
+        return f"{r['province']}·{city}" if city else r["province"]
+    if r["country"]:
+        return r["country"]
+    return "未知"

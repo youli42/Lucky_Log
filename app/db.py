@@ -59,6 +59,17 @@ CREATE INDEX IF NOT EXISTS idx_access_ip ON access_logs(client_ip);
 CREATE INDEX IF NOT EXISTS idx_access_path ON access_logs(path);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_access_dedup
   ON access_logs(instance, COALESCE(sub_key,''), ts_text, client_ip, method, path);
+CREATE TABLE IF NOT EXISTS ip_traffic (
+  instance    TEXT NOT NULL,
+  sub_key     TEXT,
+  client_ip   TEXT NOT NULL,
+  last_access INTEGER NOT NULL DEFAULT 0,
+  connections INTEGER NOT NULL DEFAULT 0,
+  traffic_in  INTEGER NOT NULL DEFAULT 0,
+  traffic_out INTEGER NOT NULL DEFAULT 0,
+  fetched_at  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (instance, sub_key, client_ip)
+);
 CREATE TABLE IF NOT EXISTS cursors (
   instance   TEXT NOT NULL,
   module     TEXT NOT NULL,
@@ -538,6 +549,65 @@ class Database:
                 break
             for row in rows:
                 yield _row_to_dict(row)
+
+    # ---------- IP 流量（accessdetail 实时快照） ----------
+
+    async def upsert_ip_traffic(self, rows: list[dict[str, Any]]) -> int:
+        if not rows:
+            return 0
+        sql = (
+            "INSERT INTO ip_traffic (instance, sub_key, client_ip, last_access,"
+            " connections, traffic_in, traffic_out, fetched_at) VALUES (?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(instance, sub_key, client_ip) DO UPDATE SET"
+            " last_access=excluded.last_access, connections=excluded.connections,"
+            " traffic_in=excluded.traffic_in, traffic_out=excluded.traffic_out,"
+            " fetched_at=excluded.fetched_at"
+        )
+        cur = await self._conn.executemany(
+            sql,
+            [
+                (
+                    r["instance"], r.get("sub_key") or "", r["client_ip"],
+                    r.get("last_access") or 0, r.get("connections") or 0,
+                    r.get("traffic_in") or 0, r.get("traffic_out") or 0,
+                    r.get("fetched_at") or 0,
+                )
+                for r in rows
+            ],
+        )
+        await self._conn.commit()
+        return cur.rowcount
+
+    async def traffic_map(self, instance: str, sub_key: str | None = None) -> dict[str, dict[str, Any]]:
+        """client_ip → 聚合流量（跨子代理汇总连接/流量/最后访问）。"""
+        if sub_key:
+            rows = await self._fetchall(
+                "SELECT * FROM ip_traffic WHERE instance=? AND sub_key=?",
+                (instance, sub_key),
+            )
+        else:
+            rows = await self._fetchall(
+                "SELECT * FROM ip_traffic WHERE instance=?", (instance,)
+            )
+        m: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            ip = r["client_ip"]
+            agg = m.setdefault(
+                ip, {"connections": 0, "traffic_in": 0, "traffic_out": 0, "last_access": 0}
+            )
+            agg["connections"] += r["connections"] or 0
+            agg["traffic_in"] += r["traffic_in"] or 0
+            agg["traffic_out"] += r["traffic_out"] or 0
+            agg["last_access"] = max(agg["last_access"], r["last_access"] or 0)
+        return m
+
+    async def traffic_summary(self, instance: str, sub_key: str | None = None) -> dict[str, Any]:
+        m = await self.traffic_map(instance, sub_key)
+        return {
+            "connections": sum(v["connections"] for v in m.values()),
+            "traffic_in": sum(v["traffic_in"] for v in m.values()),
+            "traffic_out": sum(v["traffic_out"] for v in m.values()),
+        }
 
     # ---------- 导出 / 清理 ----------
 

@@ -1,18 +1,42 @@
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { esc } from '../api'
 
 const props = defineProps({
-  items: { type: Array, default: () => [] },
-  columns: { type: Array, default: () => ['time', 'module', 'service', 'content'] },
-  keyField: { type: String, default: 'id' },
+  rows: { type: Array, default: () => [] },
+  columnDefs: { type: Array, default: () => [] },
+  rowKey: { type: String, default: 'id' },
+  expandRaw: { type: Boolean, default: false },
+  rowTooltip: { type: Function, default: null },
 })
+const emit = defineEmits(['row-click'])
 const openId = ref(null)
+const tip = ref(null)
+let timer = null
 
-function toggle(row) {
-  if (openId.value === row[props.keyField]) openId.value = null
-  else openId.value = row[props.keyField]
+function onRowEnter(e, row) {
+  clearTimeout(timer)
+  let html = ''
+  if (props.rowTooltip) html += props.rowTooltip(row) || ''
+  for (const d of props.columnDefs) {
+    if (d.tip) html += d.tip(row) || ''
+  }
+  if (!html) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  tip.value = { x: rect.left, y: rect.bottom + 6, html }
 }
+function onRowLeave() {
+  timer = setTimeout(() => { tip.value = null }, 120)
+}
+function onCellClick(row) {
+  if (props.expandRaw) {
+    if (openId.value === row[props.rowKey]) openId.value = null
+    else openId.value = row[props.rowKey]
+  } else {
+    emit('row-click', row)
+  }
+}
+onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
@@ -20,38 +44,34 @@ function toggle(row) {
     <table>
       <thead>
         <tr>
-          <th v-if="columns.includes('time')">时间</th>
-          <th v-if="columns.includes('module')">模块</th>
-          <th v-if="columns.includes('service')">服务</th>
-          <th v-if="columns.includes('ip')">IP</th>
-          <th v-if="columns.includes('method')">方法</th>
-          <th v-if="columns.includes('path')">路径</th>
-          <th v-if="columns.includes('ua')">UA</th>
-          <th v-if="columns.includes('region')">归属地</th>
-          <th v-if="columns.includes('content')">内容</th>
+          <th v-for="d in columnDefs" :key="d.key">{{ d.label }}</th>
         </tr>
       </thead>
       <tbody>
-        <template v-for="row in items" :key="row[keyField]">
-          <tr :class="{ open: openId === row[keyField] }">
-            <td v-if="columns.includes('time')" class="ts">{{ row.ts_text || row.time }}</td>
-            <td v-if="columns.includes('module')"><span class="tag">{{ row.module }}</span></td>
-            <td v-if="columns.includes('service')" class="svc">{{ row.rule_name || row.sub_name || '—' }}</td>
-            <td v-if="columns.includes('ip')" class="mono">{{ row.client_ip }}</td>
-            <td v-if="columns.includes('method')"><span class="tag">{{ row.method }}</span></td>
-            <td v-if="columns.includes('path')" class="mono path">{{ row.path }}</td>
-            <td v-if="columns.includes('ua')" class="mono" :title="row.ua">{{ row.browser }} {{ row.os }} {{ row.device }}</td>
-            <td v-if="columns.includes('region')" class="mono">{{ row.region }}</td>
-            <td v-if="columns.includes('content')" class="content" @click="toggle(row)">{{ row.content }}</td>
+        <template v-for="row in rows" :key="row[rowKey]">
+          <tr
+            :class="{ expandable: expandRaw, open: expandRaw && openId === row[rowKey] }"
+            @mouseenter="onRowEnter($event, row)"
+            @mouseleave="onRowLeave"
+            @click="onCellClick(row)"
+          >
+            <td
+              v-for="d in columnDefs" :key="d.key" :class="d.cls"
+              :title="d.title ? d.title(row) : undefined"
+              v-html="d.render ? d.render(row) : ''"
+            ></td>
           </tr>
-          <tr v-if="openId === row[keyField] && row.raw" class="detail-row">
-            <td :colspan="columns.length + 1"><pre>{{ esc(JSON.stringify(row.raw, null, 2)) }}</pre></td>
+          <tr v-if="expandRaw && openId === row[rowKey] && row.raw" class="detail-row">
+            <td :colspan="columnDefs.length"><pre>{{ esc(JSON.stringify(row.raw, null, 2)) }}</pre></td>
           </tr>
         </template>
       </tbody>
     </table>
-    <div v-if="!items.length" class="empty">暂无数据</div>
+    <div v-if="!rows.length" class="empty">暂无数据</div>
   </div>
+  <Teleport to="body">
+    <div v-if="tip" class="rowtip" :style="{ left: tip.x + 'px', top: tip.y + 'px' }" v-html="tip.html"></div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -64,11 +84,18 @@ thead th {
 tbody td { padding: 6px 10px; border-bottom: 1px solid #1c2540; vertical-align: top; }
 tr:hover { background: #1a2336; }
 tr.open td { background: #1c2742; }
+tr.expandable { cursor: pointer; }
 .ts { white-space: nowrap; color: var(--muted); }
+.mono { font-family: Consolas, monospace; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.path { max-width: 280px; }
 .svc { white-space: nowrap; color: var(--yellow); max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.mono { font-family: Consolas, monospace; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.path { max-width: 260px; }
-.content { cursor: pointer; word-break: break-all; }
 .detail-row td { background: #121a2b; color: var(--muted); }
 .detail-row pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-family: Consolas, monospace; font-size: 11px; }
+.empty { padding: 48px; text-align: center; color: var(--muted); }
+.rowtip {
+  position: fixed; z-index: 9999; max-width: 320px; padding: 8px 10px; border-radius: 8px;
+  background: #0d1424; border: 1px solid var(--border); color: var(--text);
+  font-size: 12px; line-height: 1.6; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+:global(.rowtip .tip-title) { font-weight: 700; color: var(--accent); margin-bottom: 2px; }
 </style>

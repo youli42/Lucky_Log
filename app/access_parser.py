@@ -102,3 +102,23 @@ def parse_ts(ts_text: Any) -> int:
         return int(datetime.strptime(str(ts_text), "%Y/%m/%d %H:%M:%S").timestamp())
     except (ValueError, TypeError):
         return 0
+
+
+def ua_detail(ua: str) -> dict[str, str]:
+    """UA → 完整客户端信息（family + version + brand + model）。"""
+    parsed = ua_parse(ua) if ua else None
+    if parsed is None:
+        return {
+            "browser": "", "browser_version": "", "os": "", "os_version": "",
+            "device": "", "device_brand": "", "device_model": "", "device_type": "unknown",
+        }
+    return {
+        "browser": parsed.browser.family or "",
+        "browser_version": parsed.browser.version_string or "",
+        "os": parsed.os.family or "",
+        "os_version": parsed.os.version_string or "",
+        "device": parsed.device.family or "",
+        "device_brand": parsed.device.brand or "",
+        "device_model": parsed.device.model or "",
+        "device_type": _classify_device(parsed, ua),
+    }

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, qp } from '../api'
+import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { lineOptions, paletteOf } from '../charts'
 import ChartBox from '../components/ChartBox.vue'
@@ -62,6 +62,13 @@ const timelineChart = computed(() => ({
 const totalPages = computed(() => Math.max(1, Math.ceil(data.value.total / pageSize)))
 const modLabel = computed(() => String(module.value))
 
+const logColDefs = [
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text) },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>` },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—') },
+  { key: 'content', label: '内容', render: (r) => esc(r.content) },
+]
+
 function exportLogs(fmt) {
   const p = new URLSearchParams(baseParams())
   p.set('dedup', dedup.value); p.set('format', fmt)
@@ -112,7 +119,7 @@ onBeforeUnmount(() => off && off())
     <div class="card" v-if="timeline.length"><h3>趋势</h3><div class="wrap"><ChartBox type="line" :labels="timelineChart.labels" :datasets="timelineChart.datasets" :options="lineOptions()" /></div></div>
     <div class="card">
       <div class="log-table">
-        <LogTable v-if="data.items.length" :items="data.items" />
+        <LogTable v-if="data.items.length" :rows="data.items" :column-defs="logColDefs" row-key="id" expand-raw />
         <EmptyState v-else message="该模块在此筛选下暂无日志" detail="可能是服务本身为空，或时间范围/服务筛选过于严格" />
       </div>
     </div>

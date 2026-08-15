@@ -21,6 +21,7 @@ TREE_REFRESH_SECONDS = 300
 PAGE_SIZE = 100
 MAX_PAGES_PER_POLL = 20
 INTER_SOURCE_DELAY = 0.4
+TRAFFIC_INTERVAL = 30  # accessdetail 实时快照刷新节流
 
 # 模块 → 统一日志端点（游标 LogTime）
 SINGLE_SOURCES: dict[str, str] = {
@@ -115,6 +116,7 @@ class Collector:
         self._clients: dict[str, LuckyClient] = {}
         self._trees: dict[str, list[dict[str, Any]]] = {}
         self._tree_ts: dict[str, float] = {}
+        self._traffic_ts: dict[tuple[str, str], float] = {}
         self._subscribers: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
         self._running = False
@@ -317,6 +319,50 @@ class Collector:
                     build_access=True,
                 )
                 await asyncio.sleep(INTER_SOURCE_DELAY)
+                await self._poll_accessdetail(inst, rule_key, sub_key)
+
+    # ---------- IP 流量快照（accessdetail） ----------
+
+    async def _poll_accessdetail(self, inst: InstanceConfig, rule_key: str, sub_key: str) -> None:
+        """轮询子代理 accessdetail，UPSERT 入 ip_traffic；30s 节流。"""
+        now = time.time()
+        throttle_key = (inst.name, sub_key)
+        if now - self._traffic_ts.get(throttle_key, 0) < TRAFFIC_INTERVAL:
+            return
+        self._traffic_ts[throttle_key] = now
+        rows: list[dict[str, Any]] = []
+        try:
+            page = 1
+            while page <= MAX_PAGES_PER_POLL:
+                data = await self._client(inst).get_json(
+                    f"/webservice/{rule_key}/{sub_key}/accessdetail",
+                    {"pageSize": PAGE_SIZE, "page": page},
+                )
+                res = data.get("resList") or []
+                total = data.get("ipTotal") or len(res)
+                for r in res:
+                    ip = r.get("IP")
+                    if not ip:
+                        continue
+                    rows.append({
+                        "instance": inst.name,
+                        "sub_key": sub_key,
+                        "client_ip": ip,
+                        "last_access": r.get("LastAccess") or 0,
+                        "connections": r.get("Connections") or 0,
+                        "traffic_in": r.get("TrafficIn") or 0,
+                        "traffic_out": r.get("TrafficOut") or 0,
+                        "fetched_at": int(now),
+                    })
+                if len(res) < PAGE_SIZE or page * PAGE_SIZE >= total:
+                    break
+                page += 1
+                await asyncio.sleep(INTER_SOURCE_DELAY)
+            if rows:
+                await self.db.upsert_ip_traffic(rows)
+                logger.debug("[%s] %s accessdetail %d IP", inst.name, sub_key, len(rows))
+        except LuckyError as e:
+            logger.warning("[%s] %s accessdetail 错误: %s", inst.name, sub_key, e)
 
     # ---------- 广播（WebSocket 实时推送） ----------
 
