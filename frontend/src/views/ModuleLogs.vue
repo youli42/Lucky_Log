@@ -7,7 +7,6 @@ import { lineOptions, paletteOf } from '../charts'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
-import Pager from '../components/Pager.vue'
 
 const route = useRoute()
 const module = computed(() => route.params.module)
@@ -15,7 +14,7 @@ const service = ref('')
 const search = ref('')
 const dedup = ref('time_content')
 const page = ref(1)
-const pageSize = ref(200)
+const pageSize = ref(32)
 const sort = reactive({ key: 'time', dir: 'desc' })
 const data = ref({ total: 0, items: [] })
 const services = ref([])
@@ -127,13 +126,11 @@ onBeforeUnmount(() => off && off())
     <div class="card">
       <div class="log-table">
         <LogTable v-if="data.items.length" :rows="data.items" :column-defs="logColDefs" row-key="id" expand-raw
-          :sort="sort" @sort-change="onSort" />
+          :sort="sort" @sort-change="onSort"
+          :pager="{ total: data.total, page, pageSize, pageCount: totalPages }"
+          @page-change="(p) => { page = p; loadLogs() }" @size-change="onSize" />
         <EmptyState v-else message="该模块在此筛选下暂无日志" detail="可能是服务本身为空，或时间范围/服务筛选过于严格" />
       </div>
-    </div>
-    <div class="foot">
-      <Pager :total="data.total" :page="page" :page-size="pageSize" :page-count="totalPages"
-        @page-change="(p) => { page = p; loadLogs() }" @size-change="onSize" />
     </div>
   </div>
 </template>
@@ -146,5 +143,4 @@ onBeforeUnmount(() => off && off())
 .card h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .wrap { height: 150px; }
 .log-table { display: flex; flex-direction: column; }
-.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-top: 10px; }
 </style>

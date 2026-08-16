@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { esc } from '../api'
+import Pager from './Pager.vue'
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -11,8 +12,9 @@ const props = defineProps({
   sort: { type: Object, default: null },      // { key, dir }
   sortable: { type: Boolean, default: true },
   scrollable: { type: Boolean, default: false }, // false = 表格按内容展开，页面整体滚动
+  pager: { type: Object, default: null },     // { total, page, pageSize, pageCount } → 显示在表头
 })
-const emit = defineEmits(['row-click', 'sort-change'])
+const emit = defineEmits(['row-click', 'sort-change', 'page-change', 'size-change'])
 const openId = ref(null)
 const tip = ref(null)
 let timer = null
@@ -58,6 +60,12 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <div class="table-wrap" :class="{ 'no-scroll': !scrollable }">
+    <div v-if="pager" class="pager-bar">
+      <Pager
+        :total="pager.total" :page="pager.page" :page-size="pager.pageSize" :page-count="pager.pageCount"
+        @page-change="emit('page-change', $event)" @size-change="emit('size-change', $event)"
+      />
+    </div>
     <table>
       <thead>
         <tr>
@@ -99,6 +107,10 @@ onBeforeUnmount(() => clearTimeout(timer))
 <style scoped>
 .table-wrap { flex: 1; overflow: auto; min-height: 0; }
 .table-wrap.no-scroll { flex: none; overflow: visible; min-height: 0; }
+.pager-bar {
+  display: flex; justify-content: flex-end; align-items: center;
+  padding: 6px 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel2);
+}
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 thead th {
   position: sticky; top: 0; background: var(--panel2); color: var(--muted);

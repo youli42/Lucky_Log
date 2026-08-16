@@ -7,14 +7,13 @@ import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
-import Pager from '../components/Pager.vue'
 
 const overview = ref(null)
 const access = ref(null)
 const logs = ref([])
 const logTotal = ref(0)
 const logPage = ref(1)
-const logPageSize = ref(100)
+const logPageSize = ref(32)
 const logSort = reactive({ key: 'time', dir: 'desc' })
 const inst = ref(null)
 const loading = ref(false)
@@ -148,13 +147,10 @@ onBeforeUnmount(() => off && off())
       <h3>最近日志</h3>
       <div class="log-table">
         <LogTable v-if="logs.length" :rows="logs" :column-defs="logColDefs" row-key="id" expand-raw
-          :sort="logSort" @sort-change="onLogSort" />
-        <EmptyState v-else message="暂无日志" />
-      </div>
-      <div class="log-foot">
-        <Pager :total="logTotal" :page="logPage" :page-size="logPageSize"
-          :page-count="Math.max(1, Math.ceil(logTotal / (Number(logPageSize.value) || 1)))"
+          :sort="logSort" @sort-change="onLogSort"
+          :pager="{ total: logTotal, page: logPage, pageSize: logPageSize, pageCount: Math.max(1, Math.ceil(logTotal / (Number(logPageSize.value) || 1))) }"
           @page-change="(p) => { logPage = p; loadLogs(true) }" @size-change="onLogSize" />
+        <EmptyState v-else message="暂无日志" />
       </div>
     </div>
   </div>
@@ -167,5 +163,4 @@ onBeforeUnmount(() => off && off())
 .card h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .card .wrap { height: 220px; }
 .log-table { display: flex; flex-direction: column; }
-.log-foot { margin-top: 10px; }
 </style>

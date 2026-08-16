@@ -8,7 +8,6 @@ import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
 import DetailDrawer from '../components/DetailDrawer.vue'
-import Pager from '../components/Pager.vue'
 
 const tab = ref('analytics')
 const rule = ref('')
@@ -19,7 +18,7 @@ const detailSearch = ref('')
 const detailIp = ref('')
 const detailPath = ref('')
 const page = ref(1)
-const pageSize = ref(200)
+const pageSize = ref(32)
 const sort = reactive({ key: 'time', dir: 'desc' })
 
 const stats = ref(null)
@@ -27,7 +26,7 @@ const services = ref([])
 const detail = ref({ total: 0, items: [] })
 const runtime = ref({ total: 0, items: [] })
 const runtimePage = ref(1)
-const runtimePageSize = ref(200)
+const runtimePageSize = ref(32)
 const runtimeSort = reactive({ key: 'time', dir: 'desc' })
 const loading = ref(false)
 const selected = ref(null)
@@ -237,7 +236,7 @@ const methodChart = computed(() => {
 const ipList = ref({ total: 0, items: [] })
 const ipPage = ref(1)
 const ipSearch = ref('')
-const ipPageSize = ref(500)
+const ipPageSize = ref(32)
 const ipSort = reactive({ key: 'count', dir: 'desc' })
 
 async function loadIpList() {
@@ -375,10 +374,8 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
         </div>
         <div class="ip-table">
           <LogTable :rows="ipRows(ipList.items)" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id"
-            :sort="ipSort" @sort-change="onIpSort" @row-click="gotoIpDetail" />
-        </div>
-        <div class="foot">
-          <Pager :total="ipList.total" :page="ipPage" :page-size="ipPageSize" :page-count="ipTotalPages"
+            :sort="ipSort" @sort-change="onIpSort" @row-click="gotoIpDetail"
+            :pager="{ total: ipList.total, page: ipPage, pageSize: ipPageSize, pageCount: ipTotalPages }"
             @page-change="(p) => { ipPage = p; loadIpList() }" @size-change="onIpSize" />
         </div>
       </div>
@@ -406,12 +403,10 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
         <LogTable
           :rows="detail.items" :column-defs="colDefs" :row-tooltip="rowTip" row-key="id"
           :sort="sort" @sort-change="onDetailSort" @row-click="selected = $event"
+          :pager="{ total: detail.total, page, pageSize, pageCount: detailTotalPages }"
+          @page-change="(p) => { page = p; loadDetail() }" @size-change="onDetailSize"
         />
         <EmptyState v-if="!detail.items.length" message="无匹配访问日志" />
-      </div>
-      <div class="foot">
-        <Pager :total="detail.total" :page="page" :page-size="pageSize" :page-count="detailTotalPages"
-          @page-change="(p) => { page = p; loadDetail() }" @size-change="onDetailSize" />
       </div>
     </template>
 
@@ -419,12 +414,10 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
     <template v-else>
       <div class="card table-card">
         <LogTable v-if="runtime.items.length" :rows="runtime.items" :column-defs="runtimeColDefs" row-key="id" expand-raw
-          :sort="runtimeSort" @sort-change="onRuntimeSort" />
-        <EmptyState v-else message="该实例暂无 WebService 规则层运行日志" detail="如 TLS 握手错误等；通常只有少数服务存在" />
-      </div>
-      <div class="foot">
-        <Pager :total="runtime.total" :page="runtimePage" :page-size="runtimePageSize" :page-count="runtimeTotalPages"
+          :sort="runtimeSort" @sort-change="onRuntimeSort"
+          :pager="{ total: runtime.total, page: runtimePage, pageSize: runtimePageSize, pageCount: runtimeTotalPages }"
           @page-change="(p) => { runtimePage = p; loadRuntime() }" @size-change="onRuntimeSize" />
+        <EmptyState v-else message="该实例暂无 WebService 规则层运行日志" detail="如 TLS 握手错误等；通常只有少数服务存在" />
       </div>
     </template>
 
@@ -450,7 +443,6 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
 .ip-rank { margin-top: 12px; }
 .ip-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .ip-toolbar span { color: var(--muted); font-size: 12px; }
-.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-top: 10px; }
 .colset-wrap { position: relative; }
 .colset {
   position: absolute; top: 30px; right: 0; z-index: 100; width: 190px; max-height: 320px; overflow-y: auto;
