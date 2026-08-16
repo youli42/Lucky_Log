@@ -22,7 +22,13 @@ export function bucketLabel(bucket, granularity = 'hour') {
   return `${String(d.getHours()).padStart(2, '0')}:00`
 }
 
-/** 按时间范围自动选择趋势粒度：≥3 天用天粒度（避免 7d 下 168 个点挤成一团且无日期）。 */
-export function granularityFor(range) {
-  return range === '7d' || range === '30d' ? 'day' : 'hour'
+/**
+ * 按时间范围自动选择趋势粒度：跨度 ≥3 天用天粒度（避免长范围下小时桶挤成一团且无日期）。
+ * @param {string} range 时间范围键（'1h'/'6h'/'24h'/'7d'/'custom'）
+ * @param {number|null} span 自定义范围的跨度（秒）；custom 时依赖它判断
+ */
+export function granularityFor(range, span = null) {
+  if (range === '7d' || range === '30d') return 'day'
+  if (range === 'custom' && span != null) return span >= 3 * 86400 ? 'day' : 'hour'
+  return 'hour'
 }

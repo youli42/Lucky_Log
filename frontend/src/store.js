@@ -9,6 +9,7 @@ export const store = reactive({
   timeRange: '24h',
   from: null,
   to: null,
+  rangeSpan: null,   // 当前时间范围跨度（秒）；custom 时由用户输入计算，用于趋势粒度选择
   realtime: false,
   ws: null,
   refreshTick: 0,
@@ -43,6 +44,7 @@ function applyRange() {
   const now = nowEpoch()
   store.from = now - ranges[store.timeRange]
   store.to = now
+  store.rangeSpan = ranges[store.timeRange] || null
 }
 
 export function setTimeRange(range, from = null, to = null) {
@@ -50,6 +52,7 @@ export function setTimeRange(range, from = null, to = null) {
   if (range === 'custom') {
     store.from = from
     store.to = to
+    store.rangeSpan = to && from ? to - from : null
   } else {
     applyRange()
   }

@@ -24,7 +24,7 @@ const params = () => ({
   instance: store.instance,
   from_epoch: store.from,
   to_epoch: store.to,
-  granularity: granularityFor(store.timeRange),
+  granularity: granularityFor(store.timeRange, store.rangeSpan),
 })
 
 const kpis = computed(() => [
@@ -56,7 +56,7 @@ const moduleChart = computed(() => {
 })
 const timelineChart = computed(() => {
   const rows = overview.value?.timeline || []
-  const g = granularityFor(store.timeRange)
+  const g = granularityFor(store.timeRange, store.rangeSpan)
   return {
     labels: rows.map((r) => bucketLabel(r.bucket, g)),
     datasets: [{ label: '日志数', data: rows.map((r) => r.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
@@ -64,7 +64,7 @@ const timelineChart = computed(() => {
 })
 const accessChart = computed(() => {
   const rows = access.value?.timeline || []
-  const g = granularityFor(store.timeRange)
+  const g = granularityFor(store.timeRange, store.rangeSpan)
   return {
     labels: rows.map((r) => bucketLabel(r.bucket, g)),
     datasets: [{ label: '访问', data: rows.map((r) => r.count), borderColor: '#3ddc84', backgroundColor: 'rgba(61,220,132,.15)', fill: true, tension: .3, pointRadius: 1 }],
@@ -139,8 +139,8 @@ onBeforeUnmount(() => off && off())
     </div>
     <div class="grid">
       <div class="card"><h3>模块分布</h3><div class="wrap"><ChartBox type="doughnut" :labels="moduleChart.labels" :datasets="moduleChart.datasets" :options="donutOptions" /></div></div>
-      <div class="card"><h3>日志趋势（按{{ granularityFor(store.timeRange) === 'day' ? '天' : '小时' }}）</h3><div class="wrap"><ChartBox type="line" :labels="timelineChart.labels" :datasets="timelineChart.datasets" :options="lineOptions()" /></div></div>
-      <div class="card"><h3>Web 访问趋势（按{{ granularityFor(store.timeRange) === 'day' ? '天' : '小时' }}）</h3><div class="wrap"><ChartBox type="line" :labels="accessChart.labels" :datasets="accessChart.datasets" :options="lineOptions()" /></div></div>
+      <div class="card"><h3>日志趋势（按{{ granularityFor(store.timeRange, store.rangeSpan) === 'day' ? '天' : '小时' }}）</h3><div class="wrap"><ChartBox type="line" :labels="timelineChart.labels" :datasets="timelineChart.datasets" :options="lineOptions()" /></div></div>
+      <div class="card"><h3>Web 访问趋势（按{{ granularityFor(store.timeRange, store.rangeSpan) === 'day' ? '天' : '小时' }}）</h3><div class="wrap"><ChartBox type="line" :labels="accessChart.labels" :datasets="accessChart.datasets" :options="lineOptions()" /></div></div>
       <div class="card"><h3>服务分布</h3><div class="wrap"><ChartBox type="bar" :labels="serviceChart.labels" :datasets="serviceChart.datasets" :options="barOptions(true)" /></div></div>
     </div>
     <div class="card logs-card">

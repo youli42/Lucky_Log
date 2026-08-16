@@ -142,7 +142,7 @@ const accessParams = () => ({
   from_epoch: store.from,
   to_epoch: store.to,
   search: search.value,
-  granularity: granularityFor(store.timeRange),
+  granularity: granularityFor(store.timeRange, store.rangeSpan),
 })
 
 async function loadServices() {
@@ -207,7 +207,7 @@ const kpis = computed(() => [
 
 const trendChart = computed(() => {
   const rows = stats.value?.timeline || []
-  const g = granularityFor(store.timeRange)
+  const g = granularityFor(store.timeRange, store.rangeSpan)
   return {
     labels: rows.map((r) => bucketLabel(r.bucket, g)),
     datasets: [{ label: '访问', data: rows.map((r) => r.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],

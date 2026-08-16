@@ -53,14 +53,14 @@ async function loadLogs() {
 
 async function loadStats() {
   const p = new URLSearchParams(qp(baseParams()))
-  p.set('granularity', granularityFor(store.timeRange))
+  p.set('granularity', granularityFor(store.timeRange, store.rangeSpan))
   const s = await api(`/api/stats?${p}`)
   timeline.value = s.timeline || []
 }
 
 const timeline = ref([])
 const timelineChart = computed(() => {
-  const g = granularityFor(store.timeRange)
+  const g = granularityFor(store.timeRange, store.rangeSpan)
   return {
     labels: timeline.value.map((b) => bucketLabel(b.bucket, g)),
     datasets: [{ label: '日志数', data: timeline.value.map((b) => b.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
