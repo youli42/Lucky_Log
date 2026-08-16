@@ -95,7 +95,12 @@ onMounted(async () => {
     }
   })
 })
-useDataRefresh(() => { page.value = 1; loadLogs(); loadStats(); loadServices() }, { timeRange: true })
+useDataRefresh(() => { page.value = 1; loadLogs(); loadStats(); loadServices() }, {
+  timeRange: true,
+  notifyMessage: '模块日志已刷新',
+  notifyKey: 'module-refresh',
+  notifyMinInterval: 10000,
+})
 watch(service, () => { page.value = 1; loadLogs(); loadStats() })
 onBeforeUnmount(() => off && off())
 </script>

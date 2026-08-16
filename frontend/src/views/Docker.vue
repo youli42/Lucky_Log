@@ -4,6 +4,7 @@ import { api, esc, fmtEpoch } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { fmtBytes } from '../utils'
+import { notify } from '../notify'
 import EmptyState from '../components/EmptyState.vue'
 
 const tab = ref('containers')
@@ -97,9 +98,24 @@ function restartTimer() {
   const sec = Number(store.refreshInterval) || 0
   if (sec > 0) {
     timer = setInterval(() => {
-      refreshAll().catch(() => {})
+      silentAutoRefresh()
       if (detail.value) { loadDetail(detail.value.cid).catch(() => {}) }
     }, sec * 1000)
+  }
+}
+
+// 自动刷新：静默（无闪烁），仅容器数变化时弹右上角通知（30s 限频）
+async function silentAutoRefresh() {
+  const prev = containers.value.length
+  try {
+    const q = new URLSearchParams(D())
+    const s = await api(`/api/docker/refresh?${q}`, { method: 'POST' })
+    applySnap(s)
+    if (prev != null && containers.value.length !== prev) {
+      notify({ type: 'info', message: `Docker 容器数变化: ${prev} → ${containers.value.length}`, key: 'docker-auto-refresh', minInterval: 30000 })
+    }
+  } catch (e) {
+    notify({ type: 'error', message: `Docker 自动刷新失败: ${e.message}`, key: 'docker-auto-refresh-err', minInterval: 30000 })
   }
 }
 
@@ -164,7 +180,7 @@ onMounted(async () => {
   restartTimer()
 })
 watch(tab, () => { /* 数据来自快照，无需按 tab 单独加载 */ })
-useDataRefresh(onDataRefresh)
+useDataRefresh(onDataRefresh, { notifyMessage: 'Docker 快照已刷新', notifyKey: 'docker-refresh', notifyMinInterval: 10000 })
 watch(() => store.refreshInterval, restartTimer)
 onBeforeUnmount(() => clearInterval(timer))
 </script>

@@ -93,6 +93,26 @@ async def test_stats(db):
     assert {m["module"]: m["count"] for m in mod_counts} == {"docker": 2, "ssl": 1}
 
 
+async def test_stats_timeline_fills_buckets(db):
+    """时间范围给定后横轴补齐为连续桶（空桶 count=0）。"""
+    await db.insert_logs([
+        _row(ts_epoch=BASE - 3600, ts_text="2026/08/16 02:00:00"),
+        _row(ts_epoch=BASE, ts_text="2026/08/16 03:00:00"),
+    ])
+    tl = await db.stats_timeline("inst1", None, BASE - 2 * 3600, BASE, "hour")
+    assert [t["count"] for t in tl] == [0, 1, 1]
+    assert [t["bucket"] for t in tl] == [BASE - 2 * 3600, BASE - 3600, BASE]
+
+
+async def test_access_stats_timeline_fills_buckets(db):
+    await db.insert_access_logs([
+        {**parse_access_row("inst1", _access_rec(ip="198.51.100.7"), sub_key="s1"),
+         "ts_epoch": BASE - 3600, "ts_text": "2026/08/16 02:00:00"},
+    ])
+    stats = await db.access_stats("inst1", from_epoch=BASE - 2 * 3600, to_epoch=BASE)
+    assert [t["count"] for t in stats["timeline"]] == [0, 1, 0]
+
+
 async def test_export_rows(db):
     await db.insert_logs([_row(), _row(content="second")])
     out = [r async for r in db.export_rows(instance="inst1", limit=10)]

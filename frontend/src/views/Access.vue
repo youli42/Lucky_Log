@@ -5,11 +5,13 @@ import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
 import { bucketLabel, fmtBytes } from '../utils'
+import { notify } from '../notify'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
 import DetailDrawer from '../components/DetailDrawer.vue'
+import LiveConnections from '../components/LiveConnections.vue'
 
 const tab = ref('analytics')
 const rule = ref('')
@@ -34,6 +36,7 @@ const loading = ref(false)
 const selected = ref(null)
 const showCols = ref(false)
 const lastStatsAt = ref(null)
+const showConnections = ref(false)   // 实时连接详情抽屉
 let statsTimer = null
 let filterTimer = null  // 筛选输入防抖
 
@@ -146,13 +149,29 @@ async function loadServices() {
   services.value = s.tree || []
 }
 
-async function loadStats() {
-  loading.value = true
+async function loadStats(silent = false) {
+  // silent=true：自动刷新路径，不切换 loading（避免整页图表闪烁）
+  if (!silent) loading.value = true
   try {
+    const prevTotal = stats.value?.total ?? 0
     stats.value = await api(`/api/access/stats?${qp(accessParams())}`)
     lastStatsAt.value = Math.floor(Date.now() / 1000)
+    return prevTotal
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+  }
+}
+
+// 自动刷新：静默拉取，仅当访问总数变化时弹右上角通知（30s 限频，避免打扰）
+async function silentAutoRefresh() {
+  const prev = await loadStats(true)
+  if (prev != null && stats.value && stats.value.total !== prev) {
+    notify({
+      type: 'info',
+      message: `访问统计已更新 · 共 ${stats.value.total} 条`,
+      key: 'access-auto-refresh',
+      minInterval: 30000,
+    })
   }
 }
 
@@ -182,7 +201,7 @@ const kpis = computed(() => [
   { title: '总访问', value: stats.value?.total ?? 0, sub: '访问日志条数', accent: 'var(--accent)' },
   { title: '独立 IP', value: stats.value?.unique_ips ?? 0, sub: '去重后访问 IP', accent: 'var(--green)' },
   { title: '总流量', value: fmtBytes((stats.value?.traffic?.traffic_in || 0) + (stats.value?.traffic?.traffic_out || 0)), sub: '累计流量 · 快照', accent: 'var(--yellow)' },
-  { title: '连接数', value: stats.value?.traffic?.connections ?? 0, sub: `accessdetail 快照 · 30s 自动刷新`, accent: 'var(--red)' },
+  { title: '连接数', value: stats.value?.traffic?.connections ?? 0, sub: '实时快照 · 点击查看详情', accent: 'var(--red)', clickable: true },
 ])
 
 const trendChart = computed(() => {
@@ -292,7 +311,7 @@ loadCols()
 function restartStatsTimer() {
   if (statsTimer) clearInterval(statsTimer)
   const sec = Number(store.refreshInterval) || 0
-  if (sec > 0) statsTimer = setInterval(() => loadStats(), sec * 1000)
+  if (sec > 0) statsTimer = setInterval(silentAutoRefresh, sec * 1000)
 }
 onMounted(async () => {
   await loadServices()
@@ -302,12 +321,17 @@ onMounted(async () => {
     if (msg.type !== 'logs' || !Array.isArray(msg.items)) return
     const incoming = msg.items.filter((r) => r.instance === store.instance && r.sub_key)
     if (incoming.length) {
-      loadStats()
+      loadStats(true)  // 实时推送 → 静默更新统计
       if (tab.value === 'detail') loadDetail()
     }
   })
 })
-useDataRefresh(() => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() }, { timeRange: true })
+useDataRefresh(() => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() }, {
+  timeRange: true,
+  notifyMessage: '访问分析已刷新',
+  notifyKey: 'access-refresh',
+  notifyMinInterval: 10000,
+})
 watch(() => store.refreshInterval, restartStatsTimer)
 // 筛选变化统一防抖重载（搜索框逐字输入时不打满接口）
 watch([rule, sub, host, search], () => {
@@ -355,7 +379,7 @@ onBeforeUnmount(() => {
     <!-- Tab 1: 访问分析 -->
     <template v-if="tab === 'analytics'">
       <div class="kpis">
-        <KpiCard v-for="k in kpis" :key="k.title" v-bind="k" />
+        <KpiCard v-for="k in kpis" :key="k.title" v-bind="k" @click="k.clickable && (showConnections = true)" />
       </div>
       <div class="grid">
         <div class="card span2"><h3>访问趋势</h3><div class="wrap"><ChartBox type="line" :labels="trendChart.labels" :datasets="trendChart.datasets" :options="lineOptions()" /></div></div>
@@ -426,6 +450,7 @@ onBeforeUnmount(() => {
     </template>
 
     <DetailDrawer :item="selected" @close="selected = null" />
+    <LiveConnections v-if="showConnections" :instance="store.instance" @close="showConnections = false" />
   </div>
 </template>
 

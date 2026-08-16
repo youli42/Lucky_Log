@@ -125,7 +125,7 @@ onMounted(() => {
     }
   })
 })
-useDataRefresh(loadAll, { timeRange: true })
+useDataRefresh(loadAll, { timeRange: true, notifyMessage: '数据已刷新', notifyKey: 'overview-refresh', notifyMinInterval: 10000 })
 onBeforeUnmount(() => off && off())
 </script>
 

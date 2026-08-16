@@ -4,6 +4,7 @@ import { api } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { fmtBytes } from '../utils'
+import { notify } from '../notify'
 
 const data = ref(null)
 const error = ref('')
@@ -21,6 +22,16 @@ async function load() {
     error.value = ''
   } catch (e) {
     error.value = `加载失败: ${e.message}`
+  }
+}
+
+// 自动刷新：静默（无闪烁），仅连接数变化时弹右上角通知（30s 限频）
+async function silentAutoRefresh() {
+  const prev = data.value?.runtime?.summary?.connectionCount ?? null
+  await load()
+  const cur = data.value?.runtime?.summary?.connectionCount ?? null
+  if (prev != null && cur != null && cur !== prev) {
+    notify({ type: 'info', message: `SMB 连接数变化: ${prev} → ${cur}`, key: 'smb-auto-refresh', minInterval: 30000 })
   }
 }
 
@@ -43,14 +54,14 @@ const conns = () => data.value?.runtime?.connections || []
 function restartTimer() {
   clearInterval(timer)
   const sec = Number(store.refreshInterval) || 0
-  if (sec > 0) timer = setInterval(load, sec * 1000)
+  if (sec > 0) timer = setInterval(silentAutoRefresh, sec * 1000)
 }
 
 onMounted(async () => {
   await load()
   restartTimer()
 })
-useDataRefresh(load)
+useDataRefresh(load, { notifyMessage: 'SMB 状态已刷新', notifyKey: 'smb-refresh', notifyMinInterval: 10000 })
 watch(() => store.refreshInterval, restartTimer)
 onBeforeUnmount(() => clearInterval(timer))
 </script>

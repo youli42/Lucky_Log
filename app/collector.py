@@ -26,6 +26,7 @@ INTER_SOURCE_DELAY = 0.4
 TRAFFIC_INTERVAL = 30  # accessdetail 实时快照刷新节流
 DOCKER_CACHE_INTERVAL = 60  # docker 面板快照后台预热节流
 CLEANUP_MIN_INTERVAL = 3600  # 自动清理最小执行间隔（秒）
+LIVE_MIN_INTERVAL = 10  # 实时连接查询冷却（秒，防频繁点击打爆目标）
 
 # 模块 → 统一日志端点（游标 LogTime）
 SINGLE_SOURCES: dict[str, str] = {
@@ -113,6 +114,7 @@ class Collector:
         self._instance_sem = asyncio.Semaphore(2)
         self._collecting: set[str] = set()
         self._last_cleanup: float = 0.0
+        self._live_ts: dict[str, float] = {}  # 实时连接查询冷却
         # 状态展示：instance → {last_collect, last_error, collecting, current, ...}
         self.status: dict[str, dict[str, Any]] = {}
 
@@ -182,6 +184,22 @@ class Collector:
         if inst.name not in self._clients:
             self._clients[inst.name] = LuckyClient(inst)
         return self._clients[inst.name]
+
+    def get_client(self, inst: InstanceConfig) -> LuckyClient:
+        """返回实例的 HTTP 客户端（缓存复用，生命周期由采集器统一管理）。
+
+        供路由层（实时连接、面板代理等）按需发起请求，与采集共用
+        _GLOBAL_SEMAPHORE 并发限流；客户端不要自行 close。
+        """
+        return self._client(inst)
+
+    def live_allowed(self, instance: str) -> bool:
+        """实时连接查询冷却：距上次查询 < LIVE_MIN_INTERVAL 返回 False。"""
+        now = time.time()
+        if now - self._live_ts.get(instance, 0) < LIVE_MIN_INTERVAL:
+            return False
+        self._live_ts[instance] = now
+        return True
 
     # ---------- 服务树缓存 ----------
 

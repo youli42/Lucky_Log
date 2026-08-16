@@ -67,6 +67,15 @@ Lucky_Log/
 - **通用模块日志**（无专用面板）放分隔线下方的模块列表，指向 `/module/{module}`。
 - 一个模块**只能出现在一个位置**：有专用面板的，从 `Sidebar.vue` 的 `MODULES` 列表移除（避免重复），并在面板内提供「模块日志」跳转链接（如 Docker 面板 → `/module/docker`、SMB → `/module/smb`）。
 - 新增专用面板时遵循同一约定：顶部固定入口 + 从模块列表移除 + 面板内补日志链接。
+- 模块清单统一维护在 `frontend/src/modules.js`（`MODULE_LABELS` + `DEDICATED_PANEL_MODULES`），Sidebar 与设置页共用；新增模块勿在视图内另建清单。
+
+## 自动刷新与通知约定（所有模块必须遵守）
+
+- **定时自动刷新一律静默**：不切换 loading 遮罩、不重建组件，仅替换数据（`ChartBox.vue` 已按 props 响应式平滑 `chart.update()`，无闪烁）。
+- 自动刷新**仅在有意义的变化时**通过全局通知 `notify()`（`frontend/src/notify.js`）弹右上角提示（ToastHost 渲染），并**必须带 `key` + `minInterval` 限频**（如 30s），禁止逐次刷新都弹窗。
+- 刷新失败用 `notify({ type: 'error', ... })`；手动刷新 / 切换实例等用户主动操作的反馈用 `useDataRefresh(reload, { notifyMessage, notifyKey, notifyMinInterval })`。
+- 禁止自造弹窗 / `alert` / 其他全局提示；新视图接入自动刷新或实时数据时必须遵守本约定。
+- 实时数据接口（如 `GET /api/access/connections`）由后端节流（`Collector.live_allowed`，10s 冷却），前端遇 429 时展示冷却提示，不要绕过重试。
 
 ## 目标实例（开发期默认）
 

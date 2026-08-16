@@ -12,12 +12,13 @@ from collections import Counter
 from io import StringIO
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..access_parser import ua_detail
 from ..db import Database
 from ..geoip import geo_short, query as geo_query
+from ..lucky_client import LuckyError
 
 router = APIRouter(prefix="/api/access", tags=["access"])
 
@@ -177,6 +178,91 @@ def _sort_ips(items: list, sort: str, sort_dir: str) -> list:
         return v if v is not None else (0 if key not in ("client_ip", "geo_short") else "")
 
     return sorted(items, key=val, reverse=reverse)
+
+
+@router.get("/connections")
+async def live_connections(request: Request, instance: str = Query(...)):
+    """实时连接详情：即时拉取各子代理 accessdetail（连接数 / 流量 / IP 明细）。
+
+    区别于采集器 30s 节流快照（ip_traffic），本接口是**查看面板时的实时数据**；
+    带 10s 实例级冷却（collector.live_allowed）防频繁点击打爆 Lucky。
+    客户端复用 collector 的实例客户端（共享全局并发限流 ≤2）。
+    """
+    collector = request.app.state.collector
+    inst = next((i for i in request.app.state.config.instances if i.name == instance), None)
+    if inst is None:
+        raise HTTPException(404, "实例不存在")
+    if not collector.live_allowed(instance):
+        raise HTTPException(429, "操作过于频繁，请稍后再试")
+    client = collector.get_client(inst)
+    tree = collector.service_tree(instance)
+    if not tree:  # 服务树未预热时现拉（复用采集端逻辑）
+        tree = await client.fetch_service_tree()
+
+    services: list[dict] = []
+    total_connections = total_ips = 0
+    total_in = total_out = 0
+    for rule in tree:
+        rule_key = rule.get("Key") or ""
+        rule_name = rule.get("Name") or ""
+        for sub in rule.get("SubRuleList") or []:
+            sub_key = sub.get("Key") or ""
+            sub_name = sub.get("Name") or ""
+            try:
+                data = await client.get_json(
+                    f"/webservice/{rule_key}/{sub_key}/accessdetail",
+                    {"pageSize": 500, "page": 1},
+                )
+            except LuckyError as e:
+                if e.status == 404:  # 子代理无 accessdetail（未启用）→ 跳过
+                    continue
+                raise
+            ips: list[dict] = []
+            conn = in_b = out_b = 0
+            for r in data.get("resList") or []:
+                ip = r.get("IP")
+                if not ip:
+                    continue
+                c = r.get("Connections") or 0
+                i_in = r.get("TrafficIn") or 0
+                i_out = r.get("TrafficOut") or 0
+                conn += c
+                in_b += i_in
+                out_b += i_out
+                ips.append({
+                    "client_ip": ip,
+                    "connections": c,
+                    "traffic_in": i_in,
+                    "traffic_out": i_out,
+                    "last_access": r.get("LastAccess") or 0,
+                    **_geo_fields(ip),
+                })
+            if ips:
+                total_connections += conn
+                total_ips += len(ips)
+                total_in += in_b
+                total_out += out_b
+                services.append({
+                    "rule_key": rule_key,
+                    "rule_name": rule_name,
+                    "sub_key": sub_key,
+                    "sub_name": sub_name,
+                    "connections": conn,
+                    "ip_count": len(ips),
+                    "traffic_in": in_b,
+                    "traffic_out": out_b,
+                    "ips": ips,
+                })
+    services.sort(key=lambda s: -s["connections"])
+    return {
+        "instance": instance,
+        "fetched_at": int(time.time()),
+        "total_connections": total_connections,
+        "total_ips": total_ips,
+        "traffic_in": total_in,
+        "traffic_out": total_out,
+        "services": services,
+    }
 
 
 @router.get("/export")

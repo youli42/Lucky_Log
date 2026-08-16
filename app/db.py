@@ -139,6 +139,26 @@ def _sort_clause(sort: str | None, sort_dir: str | None, cols: dict[str, str],
     return f"ORDER BY {col} {d}, id {d}"
 
 
+def _fill_buckets(
+    rows: list[dict[str, Any]],
+    from_epoch: int | None, to_epoch: int | None, step: int,
+) -> list[dict[str, Any]]:
+    """把按桶聚合的行补齐为从 from_epoch 到 to_epoch 的连续桶（空桶 count=0）。
+
+    使时间趋势横轴始终完整匹配所选时间范围，而非只有有数据的桶。
+    未提供时间范围时原样返回（全量统计场景）。
+    """
+    if from_epoch is None or to_epoch is None:
+        return rows
+    counts = {r["bucket"]: r["count"] for r in rows}
+    out: list[dict[str, Any]] = []
+    bucket = (from_epoch // step) * step
+    while bucket <= to_epoch:
+        out.append({"bucket": bucket, "count": counts.get(bucket, 0)})
+        bucket += step
+    return out
+
+
 class Database:
     def __init__(self, path: str | None = None):
         self.path = path or str(DB_PATH)
@@ -375,11 +395,13 @@ class Database:
     ) -> list[dict[str, Any]]:
         where, params = self._build_filters(instance, module, None, None, from_epoch, to_epoch, search)
         step = 3600 if granularity != "day" else 86400
-        return await self._fetchall(
+        rows = await self._fetchall(
             f"SELECT (ts_epoch/{step})*{step} AS bucket, COUNT(*) AS count "
             f"FROM logs {where} GROUP BY bucket ORDER BY bucket",
             params,
         )
+        # 补齐连续桶：横轴完整匹配所选时间范围（空桶 count=0）
+        return _fill_buckets(rows, from_epoch, to_epoch, step)
 
     async def stats_by_service(
         self, instance: str | None, from_epoch: int | None, to_epoch: int | None,
@@ -525,6 +547,7 @@ class Database:
             f"FROM access_logs {where} GROUP BY bucket ORDER BY bucket",
             params,
         )
+        timeline = _fill_buckets(timeline, from_epoch, to_epoch, step)
         return {
             "total": total,
             "unique_ips": uniq["ips"],
