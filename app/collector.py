@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
-from datetime import datetime
 from typing import Any
 
 from .access_parser import parse_access_row
@@ -15,6 +15,7 @@ from .config import AppConfig, InstanceConfig
 from .db import Database
 from .docker_api import fetch_snapshot
 from .lucky_client import LuckyClient, LuckyError
+from .timeutil import parse_lucky_ts
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ MAX_PAGES_PER_POLL = 20
 INTER_SOURCE_DELAY = 0.4
 TRAFFIC_INTERVAL = 30  # accessdetail 实时快照刷新节流
 DOCKER_CACHE_INTERVAL = 60  # docker 面板快照后台预热节流
+CLEANUP_MIN_INTERVAL = 3600  # 自动清理最小执行间隔（秒）
 
 # 模块 → 统一日志端点（游标 LogTime）
 SINGLE_SOURCES: dict[str, str] = {
@@ -57,23 +59,28 @@ BY_RULE_SOURCE = "/api/webservice/{ruleKey}/httpserver/logs"
 SUB_RULE_SOURCE = "/api/webservice/{ruleKey}/{subKey}/logs"
 
 
-def parse_ts_text(ts_text: Any) -> int:
-    """YYYY/MM/DD HH:mm:ss → epoch 秒。解析失败返回 0。"""
-    if not ts_text:
-        return 0
-    try:
-        return int(datetime.strptime(str(ts_text), "%Y/%m/%d %H:%M:%S").timestamp())
-    except (ValueError, TypeError):
-        return 0
-
-
 def normalize_record(
     instance: str, module: str, rec: dict[str, Any],
+    *,
     rule_key: str = "", rule_name: str = "", sub_key: str = "", sub_name: str = "",
+    ts_field: str = "LogTime", content_field: str = "LogContent",
 ) -> dict[str, Any] | None:
-    """把远程日志行归一化为入库行。返回 None 表示不可解析。"""
-    ts_epoch = parse_ts_text(rec.get("LogTime"))
-    content = rec.get("LogContent")
+    """把远程日志行归一化为入库行。返回 None 表示不可解析。
+
+    默认结构为 ``{LogTime, LogContent}``（时间字符串）；system 模块结构为
+    ``{timestamp(纳秒), log, time}``，调用时传 ``ts_field="time", content_field="log"``。
+    时间解析统一走 :func:`app.timeutil.parse_lucky_ts`（时间戳以 Lucky 为准）。
+    """
+    ts_text = rec.get(ts_field)
+    content = rec.get(content_field)
+    ts_epoch = parse_lucky_ts(ts_text)
+    if ts_field == "time":  # system 结构：纳秒 timestamp 优先于 time 字符串
+        try:
+            ns = int(rec["timestamp"]) if rec.get("timestamp") is not None else None
+        except (ValueError, TypeError):
+            ns = None
+        if ns:
+            ts_epoch = int(ns // 1_000_000_000)
     if ts_epoch <= 0 and not content:
         return None
     return {
@@ -84,34 +91,9 @@ def normalize_record(
         "sub_key": sub_key,
         "sub_name": sub_name,
         "ts_epoch": ts_epoch,
-        "ts_text": rec.get("LogTime") or "",
+        "ts_text": ts_text or "",
         "content": content or "",
-        "raw_json": __import__("json").dumps(rec, ensure_ascii=False),
-        "fetched_at": int(time.time()),
-    }
-
-
-def normalize_system_record(instance: str, rec: dict[str, Any]) -> dict[str, Any] | None:
-    """系统日志特殊结构：{timestamp(纳秒), log, time}。"""
-    try:
-        ns = int(rec["timestamp"]) if rec.get("timestamp") is not None else None
-    except (ValueError, TypeError):
-        ns = None
-    content = rec.get("log")
-    if ns is None and not content:
-        return None
-    ts_epoch = int(ns // 1_000_000_000) if ns else parse_ts_text(rec.get("time"))
-    return {
-        "instance": instance,
-        "module": "system",
-        "rule_key": "",
-        "rule_name": "",
-        "sub_key": "",
-        "sub_name": "",
-        "ts_epoch": ts_epoch,
-        "ts_text": rec.get("time") or "",
-        "content": content or "",
-        "raw_json": __import__("json").dumps(rec, ensure_ascii=False),
+        "raw_json": json.dumps(rec, ensure_ascii=False),
         "fetched_at": int(time.time()),
     }
 
@@ -130,6 +112,7 @@ class Collector:
         self._lock = asyncio.Lock()
         self._instance_sem = asyncio.Semaphore(2)
         self._collecting: set[str] = set()
+        self._last_cleanup: float = 0.0
         # 状态展示：instance → {last_collect, last_error, collecting, current, ...}
         self.status: dict[str, dict[str, Any]] = {}
 
@@ -256,10 +239,26 @@ class Collector:
         while self._running:
             try:
                 await self._collect_once()
+                await self._maybe_cleanup()
             except Exception as e:  # noqa: BLE001
                 logger.exception("采集循环异常: %s", e)
             # 全部实例退避中时睡到最早可重试时刻，避免空转；否则固定间隔
             await asyncio.sleep(self._next_sleep(interval))
+
+    async def _maybe_cleanup(self) -> None:
+        """按配置自动清理旧日志（logs + access_logs）；每小时至多执行一次，失败不中断采集。"""
+        cfg = self.cfg.cleanup
+        if not cfg.enabled:
+            return
+        now = time.time()
+        if now - self._last_cleanup < CLEANUP_MIN_INTERVAL:
+            return
+        self._last_cleanup = now
+        try:
+            res = await self.db.cleanup_old(cfg.days)
+            logger.info("自动清理完成（保留 %s 天内）: %s", cfg.days, res)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("自动清理失败（不影响采集）: %s", e)
 
     def _backoff_seconds(self, fail_count: int) -> int:
         """指数退避：base×2^(n-1)，超过 max_retries 进入长冷却（=max）；±20% 抖动后封顶 max。"""
@@ -364,7 +363,8 @@ class Collector:
         return started
 
     async def _collect_instance(self, inst: InstanceConfig) -> None:
-        modules = set(inst.modules or SINGLE_SOURCES.keys())
+        # 空模块列表 = 不采集任何模块（避免「清空即全采」的意外回退）
+        modules = set(inst.modules or [])
         for module in sorted(modules):
             if module == "webservice":
                 await self._poll_single(inst, module, SINGLE_SOURCES[module])
@@ -432,12 +432,15 @@ class Collector:
                             ts = 0
                         if ts < old:
                             continue
-                        row = normalize_system_record(inst.name, rec)
+                        row = normalize_record(
+                            inst.name, "system", rec,
+                            ts_field="time", content_field="log",
+                        )
                         page_ts.append(ts)
                         if ts > newest:
                             newest = ts
                     else:
-                        ts = parse_ts_text(rec.get("LogTime"))
+                        ts = parse_lucky_ts(rec.get("LogTime"))
                         if ts < old:
                             continue
                         row = normalize_record(

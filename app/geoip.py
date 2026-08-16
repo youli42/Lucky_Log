@@ -14,6 +14,12 @@ _searcher: Any = None
 _buffer: bytes | None = None
 _lock = threading.Lock()
 
+# IP → 归属地结果缓存（同 IP 在明细/排行/导出中会被反复查询）。
+# 容量到上限时整体清空（简单有效，查询成本低）；xdb 未加载成功的查询不缓存，
+# 避免负结果长期固化导致后续 xdb 就绪后仍返回旧值。
+_cache: dict[str, dict[str, str] | None] = {}
+_MAX_CACHE = 8192
+
 
 def _load() -> Any:
     global _searcher, _buffer
@@ -36,6 +42,8 @@ def _load() -> Any:
 
 def query(ip: str) -> dict[str, str] | None:
     """查询 IP，返回 {country, province, city, isp}；失败/内网返回 None。"""
+    if not ip or ip in _cache:
+        return _cache.get(ip)
     searcher = _load()
     if searcher is None:
         return None
@@ -44,21 +52,25 @@ def query(ip: str) -> dict[str, str] | None:
         if not addr.version == 4:
             return None
         if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-            return {"country": "内网/保留", "province": "", "city": "", "isp": ""}
-        region = searcher.search(ip)
-    except (ValueError, TypeError, Exception):  # noqa: BLE001
+            result = {"country": "内网/保留", "province": "", "city": "", "isp": ""}
+        else:
+            region = searcher.search(ip)
+            if not region:
+                return None
+            parts = region.split("|")
+            pick = lambda i: parts[i] if len(parts) > i and parts[i] not in ("", "0") else ""
+            result = {
+                "country": pick(0),
+                "province": pick(1),
+                "city": pick(2),
+                "isp": pick(3),
+            }
+    except (ValueError, TypeError):
         return None
-    if not region:
-        return None
-    parts = region.split("|")
-    pick = lambda i: parts[i] if len(parts) > i and parts[i] not in ("", "0") else ""
-
-    return {
-        "country": pick(0),
-        "province": pick(1),
-        "city": pick(2),
-        "isp": pick(3),
-    }
+    if len(_cache) >= _MAX_CACHE:
+        _cache.clear()
+    _cache[ip] = result
+    return result
 
 
 def province(ip: str) -> str:

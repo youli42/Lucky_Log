@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { api, fmtEpoch } from '../api'
-import { nowEpoch, setTimeRange, store, toggleRealtime, triggerRefresh } from '../store'
+import { fmtEpoch } from '../api'
+import { refreshInstances, setTimeRange, store, toggleRealtime, triggerRefresh } from '../store'
 
 const instInfo = ref('')
 const ranges = [
@@ -11,12 +11,6 @@ const ranges = [
   { key: '7d', label: '近7d' },
   { key: 'custom', label: '自定义' },
 ]
-
-async function loadInstances() {
-  const data = await api('/api/instances')
-  store.instances = (data.instances || []).filter((i) => i.enabled)
-  if (!store.instance && store.instances.length) store.instance = store.instances[0].name
-}
 
 function renderInstInfo() {
   const inst = store.instances.find((i) => i.name === store.instance)
@@ -33,14 +27,12 @@ function pickRange(r) {
   store.timeRange = r.key
   if (r.key === 'custom') return
   setTimeRange(r.key)
-  emit('range-change')
 }
 
 function applyCustom() {
   const from = toEpoch(document.getElementById('fromInput').value)
   const to = toEpoch(document.getElementById('toInput').value)
   setTimeRange('custom', from, to)
-  emit('range-change')
 }
 
 function toEpoch(v) {
@@ -48,9 +40,8 @@ function toEpoch(v) {
   return Math.floor(new Date(v).getTime() / 1000)
 }
 
-const emit = defineEmits(['range-change'])
 onMounted(async () => {
-  await loadInstances()
+  await refreshInstances()
   if (store.from == null) setTimeRange(store.timeRange)
   renderInstInfo()
 })

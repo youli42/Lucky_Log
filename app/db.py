@@ -149,6 +149,10 @@ class Database:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             self._conn = await aiosqlite.connect(self.path)
             self._conn.row_factory = aiosqlite.Row
+            # WAL：读写不互斥（采集器写 + 请求读并发），busy_timeout 避免瞬时锁冲突
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
+            await self._conn.execute("PRAGMA synchronous=NORMAL")
             await self._conn.executescript(_SCHEMA)
             await self._conn.commit()
 
@@ -724,12 +728,20 @@ class Database:
             for row in rows:
                 yield _row_to_dict(row)
 
-    async def cleanup_old(self, days: int) -> int:
+    async def cleanup_old(self, days: int) -> dict[str, int]:
+        """删除超过 days 天的旧日志（logs + access_logs）。返回各表删除行数。
+
+        ip_traffic 为实时快照（按 IP 聚合，量小），不参与时间清理。
+        VACUUM 在此处保留：由采集循环每小时至多触发一次，接受其耗时。
+        """
         cutoff = int(time.time()) - days * 86400
         cur = await self._conn.execute("DELETE FROM logs WHERE ts_epoch < ?", (cutoff,))
+        logs_deleted = cur.rowcount
+        cur = await self._conn.execute("DELETE FROM access_logs WHERE ts_epoch < ?", (cutoff,))
+        access_deleted = cur.rowcount
         await self._conn.commit()
         await self._conn.execute("VACUUM")
-        return cur.rowcount
+        return {"logs": logs_deleted, "access_logs": access_deleted}
 
     async def purge_instance(self, name: str) -> None:
         """删除实例后清除其全部采集数据（logs/access_logs/ip_traffic/cursors）。"""

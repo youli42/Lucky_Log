@@ -3,7 +3,9 @@ import json
 
 import pytest
 
+from app.access_parser import parse_access_row
 from app.db import Database
+from tests.test_access import _access_rec
 
 BASE = 1786820400  # 2026/08/16 03:00:00 (本地时区)
 
@@ -119,7 +121,17 @@ async def test_cleanup(db):
         _row(ts_epoch=BASE - 100, ts_text="2026/08/15 22:58:20"),
         _row(ts_epoch=BASE - 10 * 86400, ts_text="2026/08/05 03:00:00"),
     ])
-    deleted = await db.cleanup_old(days=7)
-    assert deleted == 1
-    res = await db.query_logs(instance="inst1")
-    assert res["total"] == 1
+    await db.insert_access_logs([
+        {**parse_access_row("inst1", _access_rec(ip="198.51.100.1"), sub_key="s1"),
+         "ts_epoch": BASE - 10 * 86400, "ts_text": "2026/08/05 03:00:00"},
+        {**parse_access_row("inst1", _access_rec(ip="198.51.100.2"), sub_key="s1"),
+         "ts_epoch": BASE, "ts_text": "2026/08/16 03:00:00"},
+    ])
+    res = await db.cleanup_old(days=7)
+    assert res["logs"] == 1
+    assert res["access_logs"] == 1  # access_logs 同样参与清理
+    res_logs = await db.query_logs(instance="inst1")
+    assert res_logs["total"] == 1
+    res_access = await db.query_access_logs(instance="inst1")
+    assert res_access["total"] == 1
+    assert res_access["items"][0]["client_ip"] == "198.51.100.2"

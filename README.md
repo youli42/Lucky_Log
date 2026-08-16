@@ -1,5 +1,12 @@
 # Lucky Log Viewer
 
+> ⚠️ **玩具级项目警告 · 安全性自负**
+>
+> 这是一个**玩具级 / 个人研究工具**，**没有任何鉴权与权限控制**：
+> - 默认只绑定 `127.0.0.1`（本机访问），请勿随意改绑 `0.0.0.0` 或对外暴露；
+> - 一旦对外开放（局域网反代、frp、公网等），任何能访问到端口的人都能读取你配置里的 **OpenToken**、**启停/重启/暂停 Docker 容器**、**断开 SMB 连接**、**删除实例与数据**；
+> - 请自行负责自己的安全：内网隔离、防火墙、反向代理加认证、定期轮换 Token 等，本项目不提供任何防护。
+
 一个基于浏览器后端的 Lucky-Admin 日志可视化面板。
 
 通过 Lucky 的管理 API 拉取各模块日志，存储到本地 SQLite，并在可交互的 Web 页面中查看、筛选、搜索、去重和导出日志；Web 模块额外提供访问日志的结构化分析与图表展示。
@@ -76,8 +83,8 @@ cd ..
 # 4. 初始化数据库 + 下载 IP 归属地库（生成 data/logs.db + data/ip2region.xdb）
 .venv\Scripts\python.exe -m app.init_db --geoip
 
-# 5. 启动
-.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8666
+# 5. 启动（默认仅本机访问；如需局域网访问自行改 config.json 的 web.host 并自负安全责任）
+.venv\Scripts\python.exe -m uvicorn app.main:app --port 8666
 
 # 6. 打开浏览器
 #    http://127.0.0.1:8666
@@ -109,6 +116,23 @@ cd frontend && npm run dev
 | [doc/07-配置说明.md](doc/07-配置说明.md) | config.json 多实例配置 |
 | [doc/08-Web访问分析.md](doc/08-Web访问分析.md) | Web 访问日志解析、统计口径、图表、API |
 | [doc/09-使用指南.md](doc/09-使用指南.md) | 从安装配置到界面操作、常见问题排查的完整指南 |
+| [doc/10-项目评审与改进建议.md](doc/10-项目评审与改进建议.md) | 初始化评审、问题清单、修复记录 |
+
+## 时间戳约定（以 Lucky 为准）
+
+Lucky 日志时间格式固定为 `YYYY/MM/DD HH:mm:ss`（无时区信息）。本项目**以 Lucky 端时间为准**：
+
+- 按运行机器本地时区解析为 epoch 秒存储（内网部署默认采集机与 Lucky 同时区，解析结果即 Lucky 端时间）；
+- epoch 仅用于排序 / 筛选 / 统计分组；展示一律使用原始时间字符串或按浏览器本地时区格式化；
+- 若采集机与 Lucky 异时区，请保证两机时区一致（解析统一在 `app/timeutil.py::parse_lucky_ts`）。
+
+## 如何新增一个采集模块
+
+模块清单统一维护，新增一个模块只需三步（其余由代码自动接入）：
+
+1. **后端** `app/collector.py` 的 `SINGLE_SOURCES` 加一行：`"模块名": "/api/模块名/logs"`（无日志端点的模块勿加，如 portforward/stun）；
+2. **后端** `app/config.py` 的 `ALL_MODULES` 列表补上模块名（设置页/默认配置可见）；
+3. **前端** `frontend/src/modules.js` 的 `MODULE_LABELS` 补一行中文/英文标签（侧边栏与设置页自动显示）。
 
 ## 许可
 

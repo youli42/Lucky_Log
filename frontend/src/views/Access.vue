@@ -4,6 +4,7 @@ import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
+import { bucketLabel, fmtBytes } from '../utils'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
@@ -34,14 +35,7 @@ const selected = ref(null)
 const showCols = ref(false)
 const lastStatsAt = ref(null)
 let statsTimer = null
-
-function fmtBytes(b) {
-  if (b == null) return '—'
-  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
-  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
-  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
-}
+let filterTimer = null  // 筛选输入防抖
 
 // ---------- 列配置 ----------
 const ALL_COLUMNS = [
@@ -279,11 +273,6 @@ function onIpSize(v) { ipPageSize.value = v; ipPage.value = 1; loadIpList() }
 function onRuntimeSort(key, dir) { runtimeSort.key = key; runtimeSort.dir = dir; runtimePage.value = 1; loadRuntime() }
 function onRuntimeSize(v) { runtimePageSize.value = v; runtimePage.value = 1; loadRuntime() }
 
-function bucketLabel(bucket) {
-  const d = new Date(bucket * 1000)
-  return `${String(d.getHours()).padStart(2, '0')}:00`
-}
-
 function exportCsv() {
   window.location.href = `/api/access/export?${qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value, format: 'csv' })}`
 }
@@ -320,8 +309,16 @@ onMounted(async () => {
 })
 useDataRefresh(() => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() }, { timeRange: true })
 watch(() => store.refreshInterval, restartStatsTimer)
-watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail(); loadIpList() })
-onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) })
+// 筛选变化统一防抖重载（搜索框逐字输入时不打满接口）
+watch([rule, sub, host, search], () => {
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => { page.value = 1; loadStats(); loadDetail(); loadIpList() }, 250)
+})
+onBeforeUnmount(() => {
+  off && off()
+  if (statsTimer) clearInterval(statsTimer)
+  clearTimeout(filterTimer)
+})
 </script>
 
 <template>

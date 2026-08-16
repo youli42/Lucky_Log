@@ -1,19 +1,12 @@
 <script setup>
 import { computed } from 'vue'
 import { esc, fmtEpoch } from '../api'
+import { fmtBytes } from '../utils'
 
 const props = defineProps({ item: Object })
 const emit = defineEmits(['close'])
 
 const TYPE_LABEL = { mobile: '移动端', desktop: '桌面端', tablet: '平板', bot: '爬虫/机器人' }
-
-function fmtBytes(b) {
-  if (b == null) return '—'
-  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
-  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
-  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
-}
 
 const sections = computed(() => {
   const it = props.item

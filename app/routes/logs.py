@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -56,6 +57,7 @@ async def export_logs(
     request: Request,
     instance: Optional[str] = None,
     module: Optional[str] = None,
+    service: Optional[str] = None,
     from_epoch: Optional[int] = None,
     to_epoch: Optional[int] = None,
     search: Optional[str] = None,
@@ -89,7 +91,7 @@ async def export_logs(
     data = buf.getvalue()
     # UTF-8 BOM，Excel 兼容
     payload = "\ufeff" + data
-    filename = f"lucky_logs_{int(__import__('time').time())}.csv"
+    filename = f"lucky_logs_{int(time.time())}.csv"
     return StreamingResponse(
         iter([payload.encode("utf-8")]),
         media_type="text/csv; charset=utf-8",

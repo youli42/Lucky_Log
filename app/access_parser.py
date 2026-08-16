@@ -8,11 +8,17 @@ from __future__ import annotations
 import json
 import re
 import time
+from functools import lru_cache
 from typing import Any
 
 from user_agents import parse as ua_parse
 
+from .timeutil import parse_lucky_ts
+
 _BOT_RE = re.compile(r"bot|crawler|spider|slurp|curl|wget|python-requests|headless", re.I)
+
+# UA 解析较慢且同一 UA 会被反复解析（采集 + 明细/导出富化），做进程内 LRU 缓存。
+_ua_parse_cached = lru_cache(maxsize=8192)(ua_parse)
 
 
 def parse_extinfo(content: str) -> dict[str, Any] | None:
@@ -67,7 +73,7 @@ def parse_access_row(
     if not client_ip:
         return None
     ua = ext.get("UserAgent") or ""
-    parsed = ua_parse(ua) if ua else None
+    parsed = _ua_parse_cached(ua) if ua else None
     if parsed is not None:
         browser = parsed.browser.family or ""
         os_family = parsed.os.family or ""
@@ -83,7 +89,7 @@ def parse_access_row(
         "sub_key": sub_key,
         "sub_name": sub_name,
         "host": ext.get("Host") or "",
-        "ts_epoch": parse_ts(rec.get("LogTime")),
+        "ts_epoch": parse_lucky_ts(rec.get("LogTime")),
         "ts_text": rec.get("LogTime") or "",
         "client_ip": client_ip,
         "method": ext.get("Method") or "",
@@ -97,20 +103,10 @@ def parse_access_row(
     }
 
 
-def parse_ts(ts_text: Any) -> int:
-    from datetime import datetime
-
-    if not ts_text:
-        return 0
-    try:
-        return int(datetime.strptime(str(ts_text), "%Y/%m/%d %H:%M:%S").timestamp())
-    except (ValueError, TypeError):
-        return 0
-
-
+@lru_cache(maxsize=8192)
 def ua_detail(ua: str) -> dict[str, str]:
     """UA → 完整客户端信息（family + version + brand + model）。"""
-    parsed = ua_parse(ua) if ua else None
+    parsed = _ua_parse_cached(ua) if ua else None
     if parsed is None:
         return {
             "browser": "", "browser_version": "", "os": "", "os_version": "",

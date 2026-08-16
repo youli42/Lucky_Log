@@ -26,24 +26,35 @@ def _get_db(request: Request) -> Database:
     return request.app.state.db
 
 
-def _enrich(item: dict, traffic: dict[str, dict]) -> dict:
-    ip = item.get("client_ip") or ""
+def _geo_fields(ip: str) -> dict:
+    """IP → 归属地字段（流量另附时用；与 _geo_traffic_fields 共用同一实现）。"""
     g = geo_query(ip) or {}
-    ud = ua_detail(item.get("ua") or "")
-    t = traffic.get(ip, {})
-    item.update({
+    return {
         "geo": g,
         "country": g.get("country", ""),
         "province": g.get("province", ""),
         "city": g.get("city", ""),
         "isp": g.get("isp", ""),
         "geo_short": geo_short(ip),
-        **ud,
+    }
+
+
+def _geo_traffic_fields(ip: str, traffic: dict[str, dict]) -> dict:
+    """IP → 归属地 + 流量快照字段（排行榜/明细共用，避免各处重复实现）。"""
+    t = traffic.get(ip, {})
+    return {
+        **_geo_fields(ip),
         "connections": t.get("connections", 0),
         "traffic_in": t.get("traffic_in", 0),
         "traffic_out": t.get("traffic_out", 0),
         "last_access": t.get("last_access", 0),
-    })
+    }
+
+
+def _enrich(item: dict, traffic: dict[str, dict]) -> dict:
+    """明细行富化：归属地 + 流量快照 + 完整客户端信息（UA 解析）。"""
+    item.update(_geo_traffic_fields(item.get("client_ip") or "", traffic))
+    item.update(ua_detail(item.get("ua") or ""))
     return item
 
 
@@ -66,24 +77,16 @@ async def access_stats(
     )
     traffic = await db.traffic_map(instance, sub)
     region_counter: Counter[str] = Counter()
+    # 排行榜先对 Top300 做轻量富化（仅归属地+流量）用于地区分布统计，
+    # 展示只取 Top15；再对 Top15 补全与明细同构的完整字段。
     for row in data["top_ips"]:
-        ip = row["k"] or ""
-        g = geo_query(ip) or {}
-        t = traffic.get(ip, {})
-        row["geo"] = g
-        row["geo_short"] = geo_short(ip)
-        row["country"] = g.get("country", "")
-        row["province"] = g.get("province", "")
-        row["city"] = g.get("city", "")
-        row["isp"] = g.get("isp", "")
-        row["connections"] = t.get("connections", 0)
-        row["traffic_in"] = t.get("traffic_in", 0)
-        row["traffic_out"] = t.get("traffic_out", 0)
-        row["last_access"] = t.get("last_access", 0)
-        row["count"] = row.pop("count")
+        row.update(_geo_traffic_fields(row.get("k") or "", traffic))
         if row["geo_short"] != "未知":
             region_counter[row["geo_short"]] += row["count"]
     data["top_ips"] = data["top_ips"][:15]
+    for row in data["top_ips"]:
+        row["client_ip"] = row["k"]
+        _enrich(row, traffic)
     data["region_dist"] = [
         {"region": k, "count": v} for k, v in region_counter.most_common(15)
     ]
@@ -143,14 +146,7 @@ async def access_ips(
     data = await db.access_ips(instance, rule, sub, host, from_epoch, to_epoch, search)
     items = data["items"]
     for row in items:
-        ip = row["client_ip"]
-        g = geo_query(ip) or {}
-        row["geo"] = g
-        row["geo_short"] = geo_short(ip)
-        row["country"] = g.get("country", "")
-        row["province"] = g.get("province", "")
-        row["city"] = g.get("city", "")
-        row["isp"] = g.get("isp", "")
+        row.update(_geo_fields(row["client_ip"]))
     items = _sort_ips(items, sort, sort_dir)
     if limit is not None:
         items = items[: max(0, limit)]

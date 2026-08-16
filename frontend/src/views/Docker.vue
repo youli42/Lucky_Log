@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api, esc, fmtEpoch } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
+import { fmtBytes } from '../utils'
 import EmptyState from '../components/EmptyState.vue'
 
 const tab = ref('containers')
@@ -32,17 +33,6 @@ function applySnap(s) {
   networks.value = s.networks || []
   volumes.value = s.volumes || []
   fetchedAt.value = s.fetched_at || 0
-}
-
-function fmtBytes(b) {
-  if (b == null) return '—'
-  const s = String(b).replace(/ B$/, '').trim()
-  const n = parseFloat(s)
-  if (isNaN(n)) return String(b)
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB'
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
 }
 
 const info = computed(() => overview.value?.info?.info || {})

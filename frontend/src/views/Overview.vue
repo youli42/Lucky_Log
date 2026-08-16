@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
-import { api, esc, fmtEpoch, qp } from '../api'
+import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
+import { bucketLabel, fmtBytes } from '../utils'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
@@ -44,13 +45,6 @@ function fmt(ts) {
   const d = new Date(ts * 1000); const p = (n) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-function fmtBytes(b) {
-  if (b == null) return '—'
-  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
-  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
-  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
-}
 
 const moduleChart = computed(() => {
   const rows = overview.value?.by_module || []
@@ -80,10 +74,6 @@ const serviceChart = computed(() => {
     datasets: [{ label: '条数', data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }],
   }
 })
-function bucketLabel(bucket) {
-  const d = new Date(bucket * 1000)
-  return `${String(d.getHours()).padStart(2, '0')}:00`
-}
 
 const logColDefs = [
   { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text), sortKey: 'time' },
@@ -155,7 +145,7 @@ onBeforeUnmount(() => off && off())
       <div class="log-table">
         <LogTable v-if="logs.length" :rows="logs" :column-defs="logColDefs" row-key="id" expand-raw
           :sort="logSort" @sort-change="onLogSort"
-          :pager="{ total: logTotal, page: logPage, pageSize: logPageSize, pageCount: Math.max(1, Math.ceil(logTotal / (Number(logPageSize.value) || 1))) }"
+          :pager="{ total: logTotal, page: logPage, pageSize: logPageSize, pageCount: Math.max(1, Math.ceil(logTotal / (Number(logPageSize) || 1))) }"
           @page-change="(p) => { logPage = p; loadLogs(true) }" @size-change="onLogSize" />
         <EmptyState v-else message="暂无日志" />
       </div>

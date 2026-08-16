@@ -2,14 +2,15 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.collector import normalize_record, normalize_system_record, parse_ts_text
+from app.collector import normalize_record
 from app.routes import stream
+from app.timeutil import parse_lucky_ts
 
 
-def test_parse_ts_text():
-    assert parse_ts_text("2026/08/16 03:00:00") == 1786820400
-    assert parse_ts_text(None) == 0
-    assert parse_ts_text("bad") == 0
+def test_parse_lucky_ts():
+    assert parse_lucky_ts("2026/08/16 03:00:00") == 1786820400
+    assert parse_lucky_ts(None) == 0
+    assert parse_lucky_ts("bad") == 0
 
 
 def test_normalize_record():
@@ -25,8 +26,9 @@ def test_normalize_record():
 
 
 def test_normalize_system_record():
+    # system 结构 {timestamp(纳秒), log, time} → 同一 normalize_record（ts_field="time"）
     rec = {"timestamp": "1786820400123456789", "log": "boot ok", "time": "2026/08/16 03:00:00"}
-    row = normalize_system_record("inst", rec)
+    row = normalize_record("inst", "system", rec, ts_field="time", content_field="log")
     assert row["ts_epoch"] == 1786820400  # 纳秒 → 秒
     assert row["module"] == "system"
     assert row["content"] == "boot ok"
@@ -34,7 +36,7 @@ def test_normalize_system_record():
 
 def test_normalize_system_record_bad_ns():
     rec = {"timestamp": "not-a-number", "log": "x", "time": "2026/08/16 03:00:00"}
-    row = normalize_system_record("inst", rec)
+    row = normalize_record("inst", "system", rec, ts_field="time", content_field="log")
     assert row is not None
     assert row["ts_epoch"] == 1786820400
 

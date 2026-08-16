@@ -44,7 +44,8 @@ ALL_MODULES = [
 ]
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "web": {"host": "0.0.0.0", "port": 8666},
+    # 默认仅本机访问；如需局域网/公网访问请自行修改并自负安全责任（无鉴权）
+    "web": {"host": "127.0.0.1", "port": 8666},
     "collect_interval": 10,
     "refresh_interval": 10,
     "cleanup": {"enabled": False, "days": 7},

@@ -3,19 +3,13 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
+import { fmtBytes } from '../utils'
 
 const data = ref(null)
 const error = ref('')
 const busyId = ref(null)
 let timer = null
 
-function fmtBytes(b) {
-  if (b == null) return '—'
-  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
-  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
-  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
-}
 function fmtRate(b) {
   if (b == null || b === 0) return '0'
   return fmtBytes(b) + '/s'

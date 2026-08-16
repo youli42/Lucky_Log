@@ -34,10 +34,9 @@ export function nowEpoch() {
 export async function refreshInstances() {
   const data = await api('/api/instances')
   store.instances = (data.instances || []).filter((i) => i.enabled)
-  if (store.instance && !store.instances.some((i) => i.name === store.instance)) {
+  if (!store.instances.some((i) => i.name === store.instance)) {
     store.instance = store.instances[0] ? store.instances[0].name : ''
   }
-  if (!store.instances.length) store.instance = ''
 }
 
 function applyRange() {

@@ -1,8 +1,9 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
-import { api, qp } from '../api'
+import { api, fmtEpoch, qp } from '../api'
 import { refreshInstances, store } from '../store'
-import { fmtEpoch } from '../api'
+import { MODULE_LABELS } from '../modules'
+import { fmtBytes } from '../utils'
 
 const cfg = ref(null)
 const allModules = ref([])
@@ -19,22 +20,6 @@ const err = ref('')
 let savedTimer = null
 let pollTimer = null
 let storageTimer = null
-
-function fmtBytes(b) {
-  if (b == null) return '—'
-  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
-  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
-  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
-}
-
-const MODULE_LABELS = {
-  system: 'System', webservice: 'Web (WebService)', docker: 'Docker', cron: 'Cron',
-  ddns: 'DDNS', ssl: 'SSL', webterminal: 'WebTerminal', rclone: 'Rclone',
-  filebrowser: 'FileBrowser', wol: 'WOL', ftpserver: 'FTP', webdav: 'WebDAV',
-  dlnaservice: 'DLNA', frp: 'FRP', cloudflared: 'Cloudflared', ipdb: 'IPDB',
-  storagemanagement: '存储管理', thirdPartyAuthManager: '三方认证',
-}
 
 async function load() {
   const [c, inst] = await Promise.all([
