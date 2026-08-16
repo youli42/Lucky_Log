@@ -185,6 +185,7 @@ onBeforeUnmount(() => clearInterval(timer))
       <h2>Docker 面板</h2>
       <span v-if="fetchedAt" class="hint">快照更新于 {{ fmtEpoch(fetchedAt) }}</span>
       <span class="hint">自动刷新 {{ store.refreshInterval || '关' }}s（设置中统一配置）</span>
+      <router-link to="/module/docker" class="hint link">Docker 模块日志</router-link>
       <span v-if="error" class="err">{{ error }}</span>
     </div>
 
@@ -332,6 +333,7 @@ onBeforeUnmount(() => clearInterval(timer))
 .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .head h2 { margin: 0; font-size: 16px; }
 .hint { color: var(--muted); font-size: 11px; }
+.hint.link { color: var(--accent); }
 .err { color: var(--red); margin-left: 8px; }
 .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; min-width: 120px; }

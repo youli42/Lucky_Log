@@ -4,7 +4,6 @@ import { store } from '../store'
 
 const MODULES = [
   { name: 'system', label: 'System' },
-  { name: 'docker', label: 'Docker' },
   { name: 'cron', label: 'Cron' },
   { name: 'ddns', label: 'DDNS' },
   { name: 'ssl', label: 'SSL' },
@@ -20,12 +19,13 @@ const MODULES = [
   { name: 'ipdb', label: 'IPDB' },
   { name: 'storagemanagement', label: '存储管理' },
   { name: 'thirdPartyAuthManager', label: '三方认证' },
-  { name: 'smb', label: 'SMB', to: '/smb' },
   { name: 'coraza', label: 'Coraza' },
   { name: 'portforward', label: '端口转发' },
   { name: 'iconlib', label: '图标库' },
   { name: 'stun', label: 'STUN' },
 ]
+// 注：docker / smb / webservice 有专用面板（Docker、SMB、Web 访问分析），在顶部固定区，
+//     故不出现在本通用模块列表（避免重复）。
 const cfg = computed(() => {
   const inst = store.instances.find((i) => i.name === store.instance)
   const enabled = new Set(inst && inst.modules ? inst.modules : [])
@@ -38,6 +38,7 @@ const cfg = computed(() => {
     <router-link to="/overview" class="item" active-class="active">总览大屏</router-link>
     <router-link to="/access" class="item" active-class="active">Web 访问分析</router-link>
     <router-link to="/docker" class="item" active-class="active">Docker</router-link>
+    <router-link to="/smb" class="item" active-class="active">SMB</router-link>
     <div class="divider"></div>
     <router-link
       v-for="m in cfg" :key="m.name"

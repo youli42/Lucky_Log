@@ -61,6 +61,13 @@ Lucky_Log/
 └── data/              # SQLite 数据库 + ip2region.xdb（运行时生成/下载）
 ```
 
+## 前端侧边栏约定
+
+- **已配置专用面板的视图放顶部固定区**（分隔线上方，独立入口）：`总览大屏 /overview`、`Web 访问分析 /access`、`Docker 面板 /docker`、`SMB 状态 /smb`。
+- **通用模块日志**（无专用面板）放分隔线下方的模块列表，指向 `/module/{module}`。
+- 一个模块**只能出现在一个位置**：有专用面板的，从 `Sidebar.vue` 的 `MODULES` 列表移除（避免重复），并在面板内提供「模块日志」跳转链接（如 Docker 面板 → `/module/docker`、SMB → `/module/smb`）。
+- 新增专用面板时遵循同一约定：顶部固定入口 + 从模块列表移除 + 面板内补日志链接。
+
 ## 目标实例（开发期默认）
 
 - `https://192.168.1.100:16601/youlilucky/api`
