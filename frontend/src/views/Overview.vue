@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
+import { useDataRefresh } from '../composables/useDataRefresh'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
@@ -134,8 +135,7 @@ onMounted(() => {
     }
   })
 })
-watch(() => [store.instance, store.from, store.to], loadAll)
-watch(() => store.refreshTick, loadAll)
+useDataRefresh(loadAll, { timeRange: true })
 onBeforeUnmount(() => off && off())
 </script>
 

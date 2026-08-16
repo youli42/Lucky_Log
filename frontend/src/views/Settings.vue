@@ -182,6 +182,7 @@ async function putConfig() {
     })
     await load()
     await refreshInstances()
+    store.refreshInterval = cfg.value.refresh_interval ?? 10
     toast()
   } catch (e) {
     err.value = `保存失败: ${e.message}`
@@ -229,6 +230,11 @@ onUnmounted(() => {
         <label>采集间隔（秒）</label>
         <input v-model.number="cfg.collect_interval" type="number" min="2" style="width:120px">
         <span class="hint">每轮采集间隔，目标并发敏感，建议 ≥5</span>
+      </div>
+      <div class="form-row">
+        <label>面板刷新间隔（秒）</label>
+        <input v-model.number="cfg.refresh_interval" type="number" min="0" style="width:120px">
+        <span class="hint">各面板（Docker/SMB/访问分析）统一自动刷新间隔；0 = 关闭自动刷新</span>
       </div>
       <div class="form-row">
         <label>自动清理</label>

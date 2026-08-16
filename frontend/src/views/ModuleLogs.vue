@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
+import { useDataRefresh } from '../composables/useDataRefresh'
 import { lineOptions, paletteOf } from '../charts'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
@@ -94,8 +95,7 @@ onMounted(async () => {
     }
   })
 })
-watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadLogs(); loadStats(); loadServices() })
-watch(() => store.refreshTick, () => { loadLogs(); loadStats() })
+useDataRefresh(() => { page.value = 1; loadLogs(); loadStats(); loadServices() }, { timeRange: true })
 watch(service, () => { page.value = 1; loadLogs(); loadStats() })
 onBeforeUnmount(() => off && off())
 </script>

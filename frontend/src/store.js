@@ -12,11 +12,19 @@ export const store = reactive({
   realtime: false,
   ws: null,
   refreshTick: 0,
+  refreshInterval: 10,   // 面板统一自动刷新间隔（秒，0=关闭），来自 config.refresh_interval
   _listeners: [],
 })
 
 export function triggerRefresh() {
   store.refreshTick += 1
+}
+
+export async function loadGlobalConfig() {
+  try {
+    const data = await api('/api/config')
+    store.refreshInterval = data.config.refresh_interval ?? 10
+  } catch { /* ignore */ }
 }
 
 export function nowEpoch() {

@@ -1,6 +1,12 @@
 <script setup>
+import { onMounted } from 'vue'
+import { loadGlobalConfig } from './store'
 import TopBar from './components/TopBar.vue'
 import Sidebar from './components/Sidebar.vue'
+
+onMounted(() => {
+  loadGlobalConfig()
+})
 </script>
 
 <template>

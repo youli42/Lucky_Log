@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
+import { useDataRefresh } from '../composables/useDataRefresh'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
@@ -299,10 +300,15 @@ const runtimeColDefs = [
 
 let off = null
 loadCols()
+function restartStatsTimer() {
+  if (statsTimer) clearInterval(statsTimer)
+  const sec = Number(store.refreshInterval) || 0
+  if (sec > 0) statsTimer = setInterval(() => loadStats(), sec * 1000)
+}
 onMounted(async () => {
   await loadServices()
   await Promise.all([loadStats(), loadDetail(), loadRuntime(), loadIpList()])
-  statsTimer = setInterval(() => loadStats(), 30000)
+  restartStatsTimer()
   off = onRealtime((msg) => {
     if (msg.type !== 'logs' || !Array.isArray(msg.items)) return
     const incoming = msg.items.filter((r) => r.instance === store.instance && r.sub_key)
@@ -312,8 +318,8 @@ onMounted(async () => {
     }
   })
 })
-watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
-watch(() => store.refreshTick, () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
+useDataRefresh(() => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() }, { timeRange: true })
+watch(() => store.refreshInterval, restartStatsTimer)
 watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail(); loadIpList() })
 onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) })
 </script>

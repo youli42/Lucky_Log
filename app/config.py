@@ -46,6 +46,7 @@ ALL_MODULES = [
 DEFAULT_CONFIG: dict[str, Any] = {
     "web": {"host": "0.0.0.0", "port": 8666},
     "collect_interval": 10,
+    "refresh_interval": 10,
     "cleanup": {"enabled": False, "days": 7},
     "backoff": {"base": 10, "max": 300, "max_retries": 3},
     "instances": [
@@ -115,6 +116,7 @@ class WebConfig(pydantic.BaseModel):
 class AppConfig(pydantic.BaseModel):
     web: WebConfig = pydantic.Field(default_factory=WebConfig)
     collect_interval: int = 10
+    refresh_interval: int = 10  # 前端面板统一自动刷新间隔（秒，0=关闭）
     cleanup: CleanupConfig = pydantic.Field(default_factory=CleanupConfig)
     backoff: BackoffConfig = pydantic.Field(default_factory=BackoffConfig)
     instances: list[InstanceConfig] = pydantic.Field(default_factory=list)

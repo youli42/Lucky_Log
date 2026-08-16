@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api, esc, fmtEpoch } from '../api'
 import { store } from '../store'
+import { useDataRefresh } from '../composables/useDataRefresh'
 import EmptyState from '../components/EmptyState.vue'
 
 const tab = ref('containers')
@@ -16,9 +17,7 @@ const logs = ref('')
 const error = ref('')
 const busy = ref(null)         // cid:action 操作中
 let timer = null
-
-const REFRESH_OPTS = [5, 10, 30, 60, 'off']
-const refreshInterval = ref(Number(localStorage.getItem('lucky_docker_refresh') || 10))
+let lastInstance = ''
 
 const D = () => ({ instance: store.instance })
 
@@ -106,20 +105,24 @@ async function control(cid, action) {
   }
 }
 
-function setRefresh(v) {
-  refreshInterval.value = v
-  localStorage.setItem('lucky_docker_refresh', String(v))
-  restartTimer()
-}
 function restartTimer() {
   clearInterval(timer)
-  const sec = Number(refreshInterval.value)
+  const sec = Number(store.refreshInterval) || 0
   if (sec > 0) {
     timer = setInterval(() => {
       refreshAll().catch(() => {})
       if (detail.value) { loadDetail(detail.value.cid).catch(() => {}) }
     }, sec * 1000)
   }
+}
+
+function onDataRefresh() {
+  if (store.instance !== lastInstance) {
+    lastInstance = store.instance
+    detail.value = null
+    logs.value = ''
+  }
+  refreshAll().catch(() => {})
 }
 
 // ---- 客户端排序（docker 列表量小，本地排即可） ----
@@ -167,12 +170,14 @@ function stateClass(c) {
 }
 
 onMounted(async () => {
+  lastInstance = store.instance
   await loadSnapshot()      // 先读本地缓存，秒显
   await refreshAll().catch(() => {})  // 再后台全量刷新（写缓存）
   restartTimer()
 })
 watch(tab, () => { /* 数据来自快照，无需按 tab 单独加载 */ })
-watch(() => store.refreshTick, () => { refreshAll().catch(() => {}) })
+useDataRefresh(onDataRefresh)
+watch(() => store.refreshInterval, restartTimer)
 onBeforeUnmount(() => clearInterval(timer))
 </script>
 
@@ -181,10 +186,7 @@ onBeforeUnmount(() => clearInterval(timer))
     <div class="head">
       <h2>Docker 面板</h2>
       <span v-if="fetchedAt" class="hint">快照更新于 {{ fmtEpoch(fetchedAt) }}</span>
-      <span class="hint">刷新</span>
-      <select :value="String(refreshInterval)" @change="setRefresh($event.target.value)">
-        <option v-for="s in REFRESH_OPTS" :key="s" :value="String(s)">{{ s === 'off' ? '关闭' : s + 's' }}</option>
-      </select>
+      <span class="hint">自动刷新 {{ store.refreshInterval || '关' }}s（设置中统一配置）</span>
       <span v-if="error" class="err">{{ error }}</span>
     </div>
 

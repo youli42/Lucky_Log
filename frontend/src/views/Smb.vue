@@ -1,7 +1,8 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { store } from '../store'
+import { useDataRefresh } from '../composables/useDataRefresh'
 
 const data = ref(null)
 const error = ref('')
@@ -45,16 +46,24 @@ const summary = () => data.value?.runtime?.summary || {}
 const users = () => data.value?.runtime?.users || []
 const conns = () => data.value?.runtime?.connections || []
 
+function restartTimer() {
+  clearInterval(timer)
+  const sec = Number(store.refreshInterval) || 0
+  if (sec > 0) timer = setInterval(load, sec * 1000)
+}
+
 onMounted(async () => {
   await load()
-  timer = setInterval(load, 8000)
+  restartTimer()
 })
+useDataRefresh(load)
+watch(() => store.refreshInterval, restartTimer)
 onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
   <div>
-    <div class="head"><h2>SMB 运行状态</h2><span class="hint">每 8s 自动刷新</span></div>
+    <div class="head"><h2>SMB 运行状态</h2><span class="hint">自动刷新 {{ store.refreshInterval || '关' }}s（设置中统一配置）</span></div>
     <div v-if="error" class="err">{{ error }}</div>
 
     <div class="kpis">
