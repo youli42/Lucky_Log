@@ -62,6 +62,10 @@ function isBackoff(name) {
   return !st.collecting && st.backoff_until > Math.floor(Date.now() / 1000)
 }
 
+function isPaused(name) {
+  return statusFor(name).paused
+}
+
 async function collectInstance(name) {
   try {
     await api(`/api/collect?instance=${encodeURIComponent(name)}`, { method: 'POST' })
@@ -280,6 +284,10 @@ onUnmounted(() => {
                   <template v-if="statusFor(i.name).page"> · 页 {{ statusFor(i.name).page }}/{{ statusFor(i.name).source_total || '?' }}</template>
                   <template v-if="statusFor(i.name).collected_rows"> · 已采 {{ statusFor(i.name).collected_rows }} 条</template>
                 </span>
+                <template v-else-if="isPaused(i.name)">
+                  <span class="red">已暂停<template v-if="statusFor(i.name).fail_count"> · 连续失败 {{ statusFor(i.name).fail_count }} 次</template><template v-if="statusFor(i.name).last_error"> · {{ statusFor(i.name).last_error }}</template></span>
+                  <span class="hint"> · 点「立即采集」或保存配置恢复</span>
+                </template>
                 <template v-else-if="isBackoff(i.name)">
                   <span class="red">退避中<template v-if="statusFor(i.name).next_retry_in"> · 下次 {{ fmtEpoch(statusFor(i.name).backoff_until) }}</template><template v-if="statusFor(i.name).fail_count"> · 连续失败 {{ statusFor(i.name).fail_count }} 次</template></span>
                 </template>

@@ -51,6 +51,7 @@ async def list_instances(request: Request):
         info["fail_count"] = st.get("fail_count", 0)
         info["backoff_until"] = st.get("backoff_until", 0)
         info["next_retry_in"] = st.get("next_retry_in", 0)
+        info["paused"] = st.get("paused", False)
         stats = await db.instance_stats(inst.name)
         info["total"] = stats["total"]
         info["access"] = await db.access_instance_total(inst.name)

@@ -78,19 +78,44 @@ async def test_collect_once_skips_backoff(tmp_path):
     await db.close()
 
 
-async def test_long_cooldown_after_max_retries(tmp_path):
+async def test_pause_after_max_retries(tmp_path):
     async def fail(inst):
         raise LuckyError("boom")
 
     db, col = await _collector(tmp_path, fail)
     inst = col.cfg.instances[0]
-    for _ in range(4):  # 超过 max_retries=3
+    for _ in range(3):  # 达到 max_retries=3
         await col._run_instance(inst)
     st = col.status["a"]
-    assert st["fail_count"] == 4
-    # 超过 max_retries 后进入长冷却 = backoff.max
-    assert st["next_retry_in"] <= 60
-    assert st["next_retry_in"] > 20  # 不再是快速重试的小退避
+    assert st["fail_count"] == 3
+    assert st["paused"] is True
+    assert st["backoff_until"] == 0  # 暂停，不再退避重试
+    # 暂停后 _collect_once 跳过（即使没有 backoff_until）
+    calls = []
+    async def track(inst):
+        calls.append(inst.name)
+    col._collect_instance = track
+    await col._collect_once()
+    assert calls == []
+    # 手动采集无视暂停
+    assert col.collect_now("a") is True
+    await asyncio.sleep(0.05)
+    assert calls == ["a"]
+    await db.close()
+
+
+async def test_sync_instances_resets_paused(tmp_path):
+    async def fail(inst):
+        raise LuckyError("boom")
+
+    db, col = await _collector(tmp_path, fail)
+    inst = col.cfg.instances[0]
+    for _ in range(3):
+        await col._run_instance(inst)
+    assert col.status["a"]["paused"] is True
+    await col.sync_instances()  # 保存配置 → 恢复
+    assert col.status["a"]["paused"] is False
+    assert col.status["a"]["fail_count"] == 0
     await db.close()
 
 

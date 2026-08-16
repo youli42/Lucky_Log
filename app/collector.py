@@ -152,6 +152,13 @@ class Collector:
             for name in list(self.status):
                 if name not in by_name:
                     self.status.pop(name, None)
+                else:
+                    # 保存配置视为用户意图恢复采集：清除暂停/失败退避状态
+                    st = self.status[name]
+                    st["paused"] = False
+                    st["fail_count"] = 0
+                    st["backoff_until"] = 0
+                    st["next_retry_in"] = 0
         for client in to_drop:
             await client.close()
 
@@ -207,7 +214,8 @@ class Collector:
         return {
             "last_collect": 0, "last_error": None, "collecting": False,
             "current": "", "page": 0, "total": 0, "collected_rows": 0,
-            "started_at": 0, "fail_count": 0, "backoff_until": 0, "next_retry_in": 0,
+            "started_at": 0, "fail_count": 0, "backoff_until": 0,
+            "next_retry_in": 0, "paused": False,
         }
 
     def _status(self, inst: InstanceConfig) -> dict[str, Any]:
@@ -284,22 +292,35 @@ class Collector:
             st["fail_count"] = 0
             st["backoff_until"] = 0
             st["next_retry_in"] = 0
+            st["paused"] = False
         except Exception as e:  # noqa: BLE001
             st["fail_count"] = st.get("fail_count", 0) + 1
-            backoff = self._backoff_seconds(st["fail_count"])
-            st["backoff_until"] = int(time.time()) + backoff
-            st["next_retry_in"] = backoff
+            if st["fail_count"] >= self.cfg.backoff.max_retries:
+                # 连续失败达上限 → 暂停自动采集（手动采集或保存配置恢复）
+                st["paused"] = True
+                st["backoff_until"] = 0
+                st["next_retry_in"] = 0
+                logger.error(
+                    "[%s] 采集失败已达 %d 次，暂停自动采集（可手动采集或保存配置恢复）: %s",
+                    inst.name, st["fail_count"], e,
+                )
+            else:
+                backoff = self._backoff_seconds(st["fail_count"])
+                st["backoff_until"] = int(time.time()) + backoff
+                st["next_retry_in"] = backoff
+                logger.error("[%s] 采集失败(第%d次, 退避%ss): %s", inst.name, st["fail_count"], backoff, e)
             st["last_error"] = str(e)
-            logger.error("[%s] 采集失败(第%d次, 退避%ss): %s", inst.name, st["fail_count"], backoff, e)
         finally:
             st["collecting"] = False
             st["current"] = ""
             self._collecting.discard(inst.name)
 
     async def _collect_once(self) -> None:
+        now = time.time()
         instances = [
             i for i in self.cfg.enabled_instances()
-            if self.status.get(i.name, {}).get("backoff_until", 0) <= time.time()
+            if not self.status.get(i.name, {}).get("paused", False)
+            and self.status.get(i.name, {}).get("backoff_until", 0) <= now
         ]
 
         async def guarded(inst: InstanceConfig) -> None:
