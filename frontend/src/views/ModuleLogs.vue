@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
@@ -7,6 +7,7 @@ import { lineOptions, paletteOf } from '../charts'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Pager from '../components/Pager.vue'
 
 const route = useRoute()
 const module = computed(() => route.params.module)
@@ -14,7 +15,8 @@ const service = ref('')
 const search = ref('')
 const dedup = ref('time_content')
 const page = ref(1)
-const pageSize = 200
+const pageSize = ref(200)
+const sort = reactive({ key: 'time', dir: 'desc' })
 const data = ref({ total: 0, items: [] })
 const services = ref([])
 const loading = ref(false)
@@ -38,7 +40,9 @@ async function loadLogs() {
   loading.value = true
   try {
     const p = new URLSearchParams(qp(baseParams()))
-    p.set('dedup', dedup.value); p.set('page', page.value); p.set('page_size', pageSize)
+    p.set('dedup', dedup.value); p.set('page', page.value)
+    p.set('page_size', pageSize.value === 'all' ? 50000 : pageSize.value)
+    p.set('sort', sort.key); p.set('sort_dir', sort.dir)
     const d = await api(`/api/logs?${p}`)
     data.value = d
   } finally {
@@ -59,15 +63,18 @@ const timelineChart = computed(() => ({
   datasets: [{ label: '日志数', data: timeline.value.map((b) => b.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
 }))
 
-const totalPages = computed(() => Math.max(1, Math.ceil(data.value.total / pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(data.value.total / (Number(pageSize.value) || 1))))
 const modLabel = computed(() => String(module.value))
 
 const logColDefs = [
-  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text) },
-  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>` },
-  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—') },
-  { key: 'content', label: '内容', render: (r) => esc(r.content) },
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text), sortKey: 'time' },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>`, sortKey: 'module' },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—'), sortKey: 'rule_name' },
+  { key: 'content', label: '内容', render: (r) => esc(r.content), sortKey: 'content' },
 ]
+
+function onSort(key, dir) { sort.key = key; sort.dir = dir; page.value = 1; loadLogs() }
+function onSize(v) { pageSize.value = v; page.value = 1; loadLogs() }
 
 function exportLogs(fmt) {
   const p = new URLSearchParams(qp(baseParams()))
@@ -119,17 +126,14 @@ onBeforeUnmount(() => off && off())
     <div class="card" v-if="timeline.length"><h3>趋势</h3><div class="wrap"><ChartBox type="line" :labels="timelineChart.labels" :datasets="timelineChart.datasets" :options="lineOptions()" /></div></div>
     <div class="card">
       <div class="log-table">
-        <LogTable v-if="data.items.length" :rows="data.items" :column-defs="logColDefs" row-key="id" expand-raw />
+        <LogTable v-if="data.items.length" :rows="data.items" :column-defs="logColDefs" row-key="id" expand-raw
+          :sort="sort" @sort-change="onSort" />
         <EmptyState v-else message="该模块在此筛选下暂无日志" detail="可能是服务本身为空，或时间范围/服务筛选过于严格" />
       </div>
     </div>
     <div class="foot">
-      <span>共 {{ data.total }} 条</span>
-      <div class="pager">
-        <button :disabled="page <= 1" @click="page--; loadLogs()">‹</button>
-        <span>{{ page }} / {{ totalPages }}</span>
-        <button :disabled="page >= totalPages" @click="page++; loadLogs()">›</button>
-      </div>
+      <Pager :total="data.total" :page="page" :page-size="pageSize" :page-count="totalPages"
+        @page-change="(p) => { page = p; loadLogs() }" @size-change="onSize" />
     </div>
   </div>
 </template>
@@ -141,7 +145,6 @@ onBeforeUnmount(() => off && off())
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
 .card h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .wrap { height: 150px; }
-.log-table { height: 420px; display: flex; flex-direction: column; }
-.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
-.pager { display: flex; gap: 8px; align-items: center; }
+.log-table { display: flex; flex-direction: column; }
+.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-top: 10px; }
 </style>

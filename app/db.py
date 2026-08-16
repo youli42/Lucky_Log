@@ -107,6 +107,28 @@ def _escape_like(s: str) -> str:
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+LOG_SORT_COLS = {
+    "time": "ts_epoch", "module": "module",
+    "rule_name": "rule_name", "sub_name": "sub_name", "content": "content",
+}
+ACCESS_SORT_COLS = {
+    "time": "ts_epoch", "ip": "client_ip", "method": "method", "path": "path",
+    "host": "host", "browser": "browser", "os": "os", "device": "device",
+    "device_type": "device_type", "service": "sub_name", "rule": "rule_name",
+}
+
+
+def _sort_clause(sort: str | None, sort_dir: str | None, cols: dict[str, str],
+                 default_col: str = "ts_epoch") -> str:
+    """白名单排序子句；非法键/空值回退默认（时间倒序）。"""
+    col = cols.get(sort or "")
+    if col is None:
+        col = default_col
+        sort_dir = "desc"
+    d = "DESC" if str(sort_dir or "").lower().startswith("d") else "ASC"
+    return f"ORDER BY {col} {d}, id {d}"
+
+
 class Database:
     def __init__(self, path: str | None = None):
         self.path = path or str(DB_PATH)
@@ -290,7 +312,7 @@ class Database:
         from_epoch: int | None = None, to_epoch: int | None = None,
         search: str | None = None, dedup: str | None = "time_content",
         page: int = 1, page_size: int = 200, service: str | None = None,
-        level: str | None = None,
+        level: str | None = None, sort: str | None = None, sort_dir: str | None = None,
     ) -> dict[str, Any]:
         where, params = self._build_filters(
             instance, module, rule_key, sub_key, from_epoch, to_epoch, search,
@@ -298,7 +320,7 @@ class Database:
         )
         keys = self._dedup_key(dedup)
         page = max(1, page)
-        page_size = min(500, max(1, page_size))
+        page_size = min(50000, max(1, page_size))
         offset = (page - 1) * page_size
 
         if keys:
@@ -315,7 +337,7 @@ class Database:
 
         total = (await self._fetchone(cnt_sql, params))["c"]
         rows = await self._fetchall(
-            f"{base} ORDER BY ts_epoch DESC, id DESC LIMIT ? OFFSET ?",
+            f"{base} {_sort_clause(sort, sort_dir, LOG_SORT_COLS)} LIMIT ? OFFSET ?",
             params + [page_size, offset],
         )
         return {"total": total, "page": page, "page_size": page_size, "items": rows}
@@ -510,18 +532,19 @@ class Database:
         host: str | None = None, from_epoch: int | None = None, to_epoch: int | None = None,
         ip: str | None = None, path: str | None = None, search: str | None = None,
         page: int = 1, page_size: int = 100,
+        sort: str | None = None, sort_dir: str | None = None,
     ) -> dict[str, Any]:
         where, params = self._build_access_filters(
             instance, rule_key, sub_key, host, from_epoch, to_epoch, ip, path, search
         )
         page = max(1, page)
-        page_size = min(500, max(1, page_size))
+        page_size = min(50000, max(1, page_size))
         offset = (page - 1) * page_size
         total = (await self._fetchone(
             f"SELECT COUNT(*) AS c FROM access_logs {where}", params
         ))["c"]
         rows = await self._fetchall(
-            f"SELECT * FROM access_logs {where} ORDER BY ts_epoch DESC, id DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM access_logs {where} {_sort_clause(sort, sort_dir, ACCESS_SORT_COLS)} LIMIT ? OFFSET ?",
             params + [page_size, offset],
         )
         return {"total": total, "page": page, "page_size": page_size, "items": rows}
@@ -536,9 +559,12 @@ class Database:
         self,
         instance: str | None = None, rule_key: str | None = None, sub_key: str | None = None,
         host: str | None = None, from_epoch: int | None = None, to_epoch: int | None = None,
-        search: str | None = None, page: int = 1, page_size: int = 50,
+        search: str | None = None,
     ) -> dict[str, Any]:
-        """全部历史 IP（去重），按访问次数倒序分页，附带流量快照。"""
+        """全部历史 IP（去重，全量返回，附带流量快照）。
+
+        排序/分页由路由层在归属地富化后做（支持按 geo/流量排序）。
+        """
         conds: list[str] = []
         params: list = []
         if instance:
@@ -563,18 +589,14 @@ class Database:
             conds.append("client_ip LIKE ? ESCAPE '\\'")
             params.append(f"%{_escape_like(search)}%")
         where = ("WHERE " + " AND ".join(conds)) if conds else ""
-        page = max(1, page)
-        page_size = min(200, max(1, page_size))
-        offset = (page - 1) * page_size
         total = (await self._fetchone(
             f"SELECT COUNT(*) AS c FROM (SELECT 1 FROM access_logs {where} GROUP BY client_ip)",
             params,
         ))["c"]
         rows = await self._fetchall(
             f"SELECT client_ip, COUNT(*) AS count, MAX(ts_epoch) AS last_access "
-            f"FROM access_logs {where} GROUP BY client_ip "
-            f"ORDER BY count DESC, client_ip LIMIT ? OFFSET ?",
-            params + [page_size, offset],
+            f"FROM access_logs {where} GROUP BY client_ip ORDER BY count DESC, client_ip",
+            params,
         )
         traffic = await self.traffic_map(instance, sub_key)
         for r in rows:
@@ -582,7 +604,7 @@ class Database:
             r["connections"] = t.get("connections", 0)
             r["traffic_in"] = t.get("traffic_in", 0)
             r["traffic_out"] = t.get("traffic_out", 0)
-        return {"total": total, "page": page, "page_size": page_size, "items": rows}
+        return {"total": total, "items": rows}
 
     async def _access_export_rows(
         self,

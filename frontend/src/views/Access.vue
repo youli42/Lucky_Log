@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
@@ -8,6 +8,7 @@ import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
 import DetailDrawer from '../components/DetailDrawer.vue'
+import Pager from '../components/Pager.vue'
 
 const tab = ref('analytics')
 const rule = ref('')
@@ -18,13 +19,16 @@ const detailSearch = ref('')
 const detailIp = ref('')
 const detailPath = ref('')
 const page = ref(1)
-const pageSize = 100
+const pageSize = ref(200)
+const sort = reactive({ key: 'time', dir: 'desc' })
 
 const stats = ref(null)
 const services = ref([])
 const detail = ref({ total: 0, items: [] })
 const runtime = ref({ total: 0, items: [] })
 const runtimePage = ref(1)
+const runtimePageSize = ref(200)
+const runtimeSort = reactive({ key: 'time', dir: 'desc' })
 const loading = ref(false)
 const selected = ref(null)
 const showCols = ref(false)
@@ -106,6 +110,12 @@ const RENDER = {
   ua: { cls: 'mono', render: (r) => esc(r.ua), title: (r) => r.ua },
 }
 
+// 明细表：后端可排序列（access_logs 存储列）；其余列不可排序
+const SORTKEY = {
+  time: 'time', ip: 'ip', method: 'method', path: 'path', host: 'host',
+  browser: 'browser', os: 'os', device: 'device',
+}
+
 const colDefs = computed(() =>
   cols.value.filter((c) => c.on).map((c) => ({
     key: c.key,
@@ -113,6 +123,8 @@ const colDefs = computed(() =>
     cls: RENDER[c.key]?.cls,
     title: RENDER[c.key]?.title,
     render: RENDER[c.key]?.render || (() => ''),
+    sortable: !!SORTKEY[c.key],
+    sortKey: SORTKEY[c.key],
   })),
 )
 
@@ -150,9 +162,14 @@ async function loadStats() {
   }
 }
 
+function pageSizeVal(v) {
+  return v === 'all' ? 50000 : Number(v)
+}
+
 async function loadDetail() {
   const p = new URLSearchParams(qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value }))
-  p.set('page', page.value); p.set('page_size', pageSize)
+  p.set('page', page.value); p.set('page_size', pageSizeVal(pageSize.value))
+  p.set('sort', sort.key); p.set('sort_dir', sort.dir)
   detail.value = await api(`/api/access/logs?${p}`)
 }
 
@@ -160,8 +177,9 @@ async function loadRuntime() {
   const p = new URLSearchParams(qp({
     instance: store.instance, module: 'webservice', level: 'rule',
     from_epoch: store.from, to_epoch: store.to, dedup: 'off',
-    page: runtimePage.value, page_size: 100,
+    page: runtimePage.value, page_size: pageSizeVal(runtimePageSize.value),
   }))
+  p.set('sort', runtimeSort.key); p.set('sort_dir', runtimeSort.dir)
   runtime.value = await api(`/api/logs?${p}`)
 }
 
@@ -215,30 +233,36 @@ const methodChart = computed(() => {
   return { labels: rows.map((r) => r.name), datasets: [{ label: '次数', data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
 })
 
-// IP 排行明细表（全部历史 IP，分页）
+// IP 排行明细表（全部历史 IP）
 const ipList = ref({ total: 0, items: [] })
 const ipPage = ref(1)
 const ipSearch = ref('')
-const ipPageSize = 50
+const ipPageSize = ref(500)
+const ipSort = reactive({ key: 'count', dir: 'desc' })
 
 async function loadIpList() {
   const p = new URLSearchParams(qp({ ...accessParams(), search: ipSearch.value }))
-  p.set('page', ipPage.value); p.set('page_size', ipPageSize)
+  p.set('sort', ipSort.key); p.set('sort_dir', ipSort.dir)
+  if (ipPageSize.value === 'all') {
+    p.set('limit', 50000)
+  } else {
+    p.set('page', ipPage.value); p.set('page_size', ipPageSize.value)
+  }
   ipList.value = await api(`/api/access/ips?${p}`)
 }
 
-const ipTotalPages = computed(() => Math.max(1, Math.ceil(ipList.value.total / ipPageSize)))
+const ipTotalPages = computed(() => Math.max(1, Math.ceil(ipList.value.total / (Number(ipPageSize.value) || 1))))
 const ipColDefs = [
-  { key: 'rank', label: '#', render: (r) => esc(r.rank) },
-  { key: 'ip', label: 'IP', cls: 'mono', render: (r) => esc(r.client_ip) },
-  { key: 'geo', label: '归属地', render: (r) => esc(r.geo_short) },
-  { key: 'count', label: '请求', render: (r) => esc(r.count) },
-  { key: 'conn', label: '连接', render: (r) => esc(r.connections) },
-  { key: 'traffic', label: '流量入/出', render: (r) => `${fmtBytes(r.traffic_in)} / ${fmtBytes(r.traffic_out)}` },
-  { key: 'last', label: '最后访问', render: (r) => (r.last_access ? fmtEpoch(r.last_access) : '—') },
+  { key: 'rank', label: '#', render: (r) => esc(r.rank), sortable: false },
+  { key: 'ip', label: 'IP', cls: 'mono', render: (r) => esc(r.client_ip), sortKey: 'ip' },
+  { key: 'geo', label: '归属地', render: (r) => esc(r.geo_short), sortKey: 'geo' },
+  { key: 'count', label: '请求', render: (r) => esc(r.count), sortKey: 'count' },
+  { key: 'conn', label: '连接', render: (r) => esc(r.connections), sortKey: 'connections' },
+  { key: 'traffic', label: '流量入/出', render: (r) => `${fmtBytes(r.traffic_in)} / ${fmtBytes(r.traffic_out)}`, sortKey: 'traffic_out' },
+  { key: 'last', label: '最后访问', render: (r) => (r.last_access ? fmtEpoch(r.last_access) : '—'), sortKey: 'last_access' },
 ]
 function ipRows(pageItems) {
-  const base = (ipPage.value - 1) * ipPageSize
+  const base = (ipPage.value - 1) * (Number(ipPageSize.value) || 1)
   return pageItems.map((r, i) => ({ id: r.client_ip, rank: base + i + 1, ...r }))
 }
 function gotoIpDetail(row) {
@@ -247,6 +271,13 @@ function gotoIpDetail(row) {
   page.value = 1
   loadDetail()
 }
+
+function onDetailSort(key, dir) { sort.key = key; sort.dir = dir; page.value = 1; loadDetail() }
+function onDetailSize(v) { pageSize.value = v; page.value = 1; loadDetail() }
+function onIpSort(key, dir) { ipSort.key = key; ipSort.dir = dir; ipPage.value = 1; loadIpList() }
+function onIpSize(v) { ipPageSize.value = v; ipPage.value = 1; loadIpList() }
+function onRuntimeSort(key, dir) { runtimeSort.key = key; runtimeSort.dir = dir; runtimePage.value = 1; loadRuntime() }
+function onRuntimeSize(v) { runtimePageSize.value = v; runtimePage.value = 1; loadRuntime() }
 
 function bucketLabel(bucket) {
   const d = new Date(bucket * 1000)
@@ -257,14 +288,14 @@ function exportCsv() {
   window.location.href = `/api/access/export?${qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value, format: 'csv' })}`
 }
 
-const detailTotalPages = computed(() => Math.max(1, Math.ceil(detail.value.total / pageSize)))
-const runtimeTotalPages = computed(() => Math.max(1, Math.ceil(runtime.value.total / 100)))
+const detailTotalPages = computed(() => Math.max(1, Math.ceil(detail.value.total / (Number(pageSize.value) || 1))))
+const runtimeTotalPages = computed(() => Math.max(1, Math.ceil(runtime.value.total / (Number(runtimePageSize.value) || 1))))
 
 const runtimeColDefs = [
-  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text || '') },
-  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module || '')}</span>` },
-  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || '—') },
-  { key: 'content', label: '内容', render: (r) => esc(r.content || '') },
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text || ''), sortKey: 'time' },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module || '')}</span>`, sortKey: 'module' },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || '—'), sortKey: 'rule_name' },
+  { key: 'content', label: '内容', render: (r) => esc(r.content || ''), sortKey: 'content' },
 ]
 
 let off = null
@@ -343,14 +374,12 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
           <span>共 {{ ipList.total }} 个 IP</span>
         </div>
         <div class="ip-table">
-          <LogTable :rows="ipRows(ipList.items)" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id" @row-click="gotoIpDetail" />
+          <LogTable :rows="ipRows(ipList.items)" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id"
+            :sort="ipSort" @sort-change="onIpSort" @row-click="gotoIpDetail" />
         </div>
         <div class="foot">
-          <div class="pager">
-            <button :disabled="ipPage <= 1" @click="ipPage--; loadIpList()">‹</button>
-            <span>{{ ipPage }} / {{ ipTotalPages }}</span>
-            <button :disabled="ipPage >= ipTotalPages" @click="ipPage++; loadIpList()">›</button>
-          </div>
+          <Pager :total="ipList.total" :page="ipPage" :page-size="ipPageSize" :page-count="ipTotalPages"
+            @page-change="(p) => { ipPage = p; loadIpList() }" @size-change="onIpSize" />
         </div>
       </div>
     </template>
@@ -376,33 +405,26 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
       <div class="card table-card">
         <LogTable
           :rows="detail.items" :column-defs="colDefs" :row-tooltip="rowTip" row-key="id"
-          @row-click="selected = $event"
+          :sort="sort" @sort-change="onDetailSort" @row-click="selected = $event"
         />
         <EmptyState v-if="!detail.items.length" message="无匹配访问日志" />
       </div>
       <div class="foot">
-        <span>共 {{ detail.total }} 条</span>
-        <div class="pager">
-          <button :disabled="page <= 1" @click="page--; loadDetail()">‹</button>
-          <span>{{ page }} / {{ detailTotalPages }}</span>
-          <button :disabled="page >= detailTotalPages" @click="page++; loadDetail()">›</button>
-        </div>
+        <Pager :total="detail.total" :page="page" :page-size="pageSize" :page-count="detailTotalPages"
+          @page-change="(p) => { page = p; loadDetail() }" @size-change="onDetailSize" />
       </div>
     </template>
 
     <!-- Tab 3: 运行日志 -->
     <template v-else>
       <div class="card table-card">
-        <LogTable v-if="runtime.items.length" :rows="runtime.items" :column-defs="runtimeColDefs" row-key="id" expand-raw />
+        <LogTable v-if="runtime.items.length" :rows="runtime.items" :column-defs="runtimeColDefs" row-key="id" expand-raw
+          :sort="runtimeSort" @sort-change="onRuntimeSort" />
         <EmptyState v-else message="该实例暂无 WebService 规则层运行日志" detail="如 TLS 握手错误等；通常只有少数服务存在" />
       </div>
       <div class="foot">
-        <span>共 {{ runtime.total }} 条</span>
-        <div class="pager">
-          <button :disabled="runtimePage <= 1" @click="runtimePage--; loadRuntime()">‹</button>
-          <span>{{ runtimePage }} / {{ runtimeTotalPages }}</span>
-          <button :disabled="runtimePage >= runtimeTotalPages" @click="runtimePage++; loadRuntime()">›</button>
-        </div>
+        <Pager :total="runtime.total" :page="runtimePage" :page-size="runtimePageSize" :page-count="runtimeTotalPages"
+          @page-change="(p) => { runtimePage = p; loadRuntime() }" @size-change="onRuntimeSize" />
       </div>
     </template>
 
@@ -425,13 +447,10 @@ onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) 
 .card .wrap { height: 230px; }
 .span2 { grid-column: span 2; }
 .table-card { margin-bottom: 12px; }
-.table-card :deep(.table-wrap) { height: 460px; }
 .ip-rank { margin-top: 12px; }
 .ip-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .ip-toolbar span { color: var(--muted); font-size: 12px; }
-.ip-table :deep(.table-wrap) { height: 360px; }
-.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
-.pager { display: flex; gap: 8px; align-items: center; }
+.foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-top: 10px; }
 .colset-wrap { position: relative; }
 .colset {
   position: absolute; top: 30px; right: 0; z-index: 100; width: 190px; max-height: 320px; overflow-y: auto;

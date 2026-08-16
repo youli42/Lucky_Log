@@ -31,6 +31,8 @@ async def query_logs(
     page: int = 1,
     page_size: int = 200,
     level: Optional[str] = None,
+    sort: Optional[str] = None,
+    sort_dir: Optional[str] = None,
 ):
     db = _get_db(request)
     return await db.query_logs(
@@ -44,6 +46,8 @@ async def query_logs(
         page_size=page_size,
         service=service,
         level=level,
+        sort=sort,
+        sort_dir=sort_dir,
     )
 
 

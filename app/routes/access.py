@@ -110,10 +110,13 @@ async def access_logs(
     search: Optional[str] = None,
     page: int = 1,
     page_size: int = 100,
+    sort: Optional[str] = None,
+    sort_dir: Optional[str] = None,
 ):
     db = _get_db(request)
     data = await db.query_access_logs(
-        instance, rule, sub, host, from_epoch, to_epoch, ip, path, search, page, page_size
+        instance, rule, sub, host, from_epoch, to_epoch, ip, path, search,
+        page, page_size, sort, sort_dir,
     )
     traffic = await db.traffic_map(instance, sub)
     data["items"] = [_enrich(r, traffic) for r in data["items"]]
@@ -130,12 +133,16 @@ async def access_ips(
     from_epoch: Optional[int] = None,
     to_epoch: Optional[int] = None,
     search: Optional[str] = None,
+    sort: str = "count",
+    sort_dir: str = "desc",
     page: int = 1,
-    page_size: int = 50,
+    page_size: int = 500,
+    limit: Optional[int] = None,
 ):
     db = _get_db(request)
-    data = await db.access_ips(instance, rule, sub, host, from_epoch, to_epoch, search, page, page_size)
-    for row in data["items"]:
+    data = await db.access_ips(instance, rule, sub, host, from_epoch, to_epoch, search)
+    items = data["items"]
+    for row in items:
         ip = row["client_ip"]
         g = geo_query(ip) or {}
         row["geo"] = g
@@ -144,7 +151,36 @@ async def access_ips(
         row["province"] = g.get("province", "")
         row["city"] = g.get("city", "")
         row["isp"] = g.get("isp", "")
-    return data
+    items = _sort_ips(items, sort, sort_dir)
+    if limit is not None:
+        items = items[: max(0, limit)]
+    else:
+        page = max(1, page)
+        page_size = min(50000, max(1, page_size))
+        offset = (page - 1) * page_size
+        items = items[offset:offset + page_size]
+    return {"total": data["total"], "page": page, "page_size": page_size, "items": items}
+
+
+_IP_SORT_KEYS = {
+    "ip": "client_ip", "count": "count", "last_access": "last_access",
+    "connections": "connections", "traffic_in": "traffic_in",
+    "traffic_out": "traffic_out", "geo": "geo_short",
+}
+
+
+def _sort_ips(items: list, sort: str, sort_dir: str) -> list:
+    key = _IP_SORT_KEYS.get(sort or "")
+    if key is None:
+        key = "count"
+        sort_dir = "desc"
+    reverse = str(sort_dir or "").lower().startswith("d")
+
+    def val(row):
+        v = row.get(key)
+        return v if v is not None else (0 if key not in ("client_ip", "geo_short") else "")
+
+    return sorted(items, key=val, reverse=reverse)
 
 
 @router.get("/export")

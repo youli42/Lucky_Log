@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { esc } from '../api'
 
 const props = defineProps({
@@ -8,11 +8,28 @@ const props = defineProps({
   rowKey: { type: String, default: 'id' },
   expandRaw: { type: Boolean, default: false },
   rowTooltip: { type: Function, default: null },
+  sort: { type: Object, default: null },      // { key, dir }
+  sortable: { type: Boolean, default: true },
+  scrollable: { type: Boolean, default: false }, // false = 表格按内容展开，页面整体滚动
 })
-const emit = defineEmits(['row-click'])
+const emit = defineEmits(['row-click', 'sort-change'])
 const openId = ref(null)
 const tip = ref(null)
 let timer = null
+
+const sortKey = computed(() => (props.sort ? props.sort.key : null))
+const sortDir = computed(() => (props.sort ? props.sort.dir : null))
+
+function isSortable(d) {
+  return props.sortable && d.sortable !== false
+}
+function onHeaderClick(d) {
+  if (!isSortable(d)) return
+  const key = d.sortKey || d.key
+  let dir = 'asc'
+  if (sortKey.value === key) dir = sortDir.value === 'asc' ? 'desc' : 'asc'
+  emit('sort-change', key, dir)
+}
 
 function onRowEnter(e, row) {
   clearTimeout(timer)
@@ -40,11 +57,16 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <div class="table-wrap">
+  <div class="table-wrap" :class="{ 'no-scroll': !scrollable }">
     <table>
       <thead>
         <tr>
-          <th v-for="d in columnDefs" :key="d.key">{{ d.label }}</th>
+          <th
+            v-for="d in columnDefs" :key="d.key"
+            :class="{ sortable: isSortable(d), sorted: sortKey === (d.sortKey || d.key) }"
+            :title="isSortable(d) ? '点击排序' : undefined"
+            @click="onHeaderClick(d)"
+          >{{ d.label }}<span v-if="sortKey === (d.sortKey || d.key)" class="arrow">{{ sortDir === 'asc' ? '▲' : '▼' }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -76,11 +98,16 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <style scoped>
 .table-wrap { flex: 1; overflow: auto; min-height: 0; }
+.table-wrap.no-scroll { flex: none; overflow: visible; min-height: 0; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 thead th {
   position: sticky; top: 0; background: var(--panel2); color: var(--muted);
   text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap;
 }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+th.sorted { color: var(--accent); }
+.arrow { margin-left: 3px; font-size: 9px; }
 tbody td { padding: 6px 10px; border-bottom: 1px solid #1c2540; vertical-align: top; }
 tr:hover { background: #1a2336; }
 tr.open td { background: #1c2742; }

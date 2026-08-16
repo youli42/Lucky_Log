@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
@@ -7,11 +7,15 @@ import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Pager from '../components/Pager.vue'
 
 const overview = ref(null)
 const access = ref(null)
 const logs = ref([])
 const logTotal = ref(0)
+const logPage = ref(1)
+const logPageSize = ref(100)
+const logSort = reactive({ key: 'time', dir: 'desc' })
 const inst = ref(null)
 const loading = ref(false)
 
@@ -76,10 +80,10 @@ function bucketLabel(bucket) {
 }
 
 const logColDefs = [
-  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text) },
-  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>` },
-  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—') },
-  { key: 'content', label: '内容', render: (r) => esc(r.content) },
+  { key: 'time', label: '时间', cls: 'ts', render: (r) => esc(r.ts_text), sortKey: 'time' },
+  { key: 'module', label: '模块', render: (r) => `<span class="tag">${esc(r.module)}</span>`, sortKey: 'module' },
+  { key: 'svc', label: '服务', render: (r) => esc(r.rule_name || r.sub_name || '—'), sortKey: 'rule_name' },
+  { key: 'content', label: '内容', render: (r) => esc(r.content), sortKey: 'content' },
 ]
 
 async function loadAll() {
@@ -101,12 +105,17 @@ async function loadAll() {
 
 async function loadLogs(reset) {
   const p = new URLSearchParams(qp(params()))
-  p.set('page', 1); p.set('page_size', 50); p.set('dedup', 'off')
+  p.set('page', logPage.value)
+  p.set('page_size', logPageSize.value === 'all' ? 50000 : logPageSize.value)
+  p.set('dedup', 'off')
+  p.set('sort', logSort.key); p.set('sort_dir', logSort.dir)
   const data = await api(`/api/logs?${p}`)
   logTotal.value = data.total
-  if (reset) logs.value = data.items
-  else logs.value = data.items
+  logs.value = data.items
 }
+
+function onLogSort(key, dir) { logSort.key = key; logSort.dir = dir; logPage.value = 1; loadLogs(true) }
+function onLogSize(v) { logPageSize.value = v; logPage.value = 1; loadLogs(true) }
 
 let off = null
 onMounted(() => {
@@ -136,10 +145,16 @@ onBeforeUnmount(() => off && off())
       <div class="card"><h3>服务分布</h3><div class="wrap"><ChartBox type="bar" :labels="serviceChart.labels" :datasets="serviceChart.datasets" :options="barOptions(true)" /></div></div>
     </div>
     <div class="card logs-card">
-      <h3>最近日志 <span class="total">共 {{ logTotal }} 条</span></h3>
+      <h3>最近日志</h3>
       <div class="log-table">
-        <LogTable v-if="logs.length" :rows="logs" :column-defs="logColDefs" row-key="id" expand-raw />
+        <LogTable v-if="logs.length" :rows="logs" :column-defs="logColDefs" row-key="id" expand-raw
+          :sort="logSort" @sort-change="onLogSort" />
         <EmptyState v-else message="暂无日志" />
+      </div>
+      <div class="log-foot">
+        <Pager :total="logTotal" :page="logPage" :page-size="logPageSize"
+          :page-count="Math.max(1, Math.ceil(logTotal / (Number(logPageSize.value) || 1)))"
+          @page-change="(p) => { logPage = p; loadLogs(true) }" @size-change="onLogSize" />
       </div>
     </div>
   </div>
@@ -151,6 +166,6 @@ onBeforeUnmount(() => off && off())
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 .card h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .card .wrap { height: 220px; }
-.logs-card .total { color: var(--muted); font-weight: 400; margin-left: 8px; }
-.log-table { height: 320px; display: flex; flex-direction: column; }
+.log-table { display: flex; flex-direction: column; }
+.log-foot { margin-top: 10px; }
 </style>
