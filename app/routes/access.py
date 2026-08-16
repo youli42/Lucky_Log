@@ -120,6 +120,33 @@ async def access_logs(
     return data
 
 
+@router.get("/ips")
+async def access_ips(
+    request: Request,
+    instance: Optional[str] = None,
+    rule: Optional[str] = None,
+    sub: Optional[str] = None,
+    host: Optional[str] = None,
+    from_epoch: Optional[int] = None,
+    to_epoch: Optional[int] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    db = _get_db(request)
+    data = await db.access_ips(instance, rule, sub, host, from_epoch, to_epoch, search, page, page_size)
+    for row in data["items"]:
+        ip = row["client_ip"]
+        g = geo_query(ip) or {}
+        row["geo"] = g
+        row["geo_short"] = geo_short(ip)
+        row["country"] = g.get("country", "")
+        row["province"] = g.get("province", "")
+        row["city"] = g.get("city", "")
+        row["isp"] = g.get("isp", "")
+    return data
+
+
 @router.get("/export")
 async def access_export(
     request: Request,

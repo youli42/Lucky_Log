@@ -1,0 +1,541 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]: Lucky Log
+    - combobox "实例" [ref=e6]:
+      - option "lucky-main (10.10.10.11)" [selected]
+    - button "近1h" [ref=e8] [cursor=pointer]
+    - button "近6h" [ref=e9] [cursor=pointer]
+    - button "近24h" [ref=e10] [cursor=pointer]
+    - button "近7d" [ref=e11] [cursor=pointer]
+    - button "自定义" [ref=e12] [cursor=pointer]
+    - textbox [ref=e13]
+    - textbox [ref=e14]
+    - button "应用" [ref=e15] [cursor=pointer]
+    - 'button "实时: 关" [ref=e17] [cursor=pointer]'
+    - button "手动刷新" [ref=e18] [cursor=pointer]
+    - generic [ref=e19]: 库内 4155 条
+  - generic [ref=e20]:
+    - navigation [ref=e21]:
+      - link "总览大屏" [ref=e22] [cursor=pointer]:
+        - /url: "#/overview"
+      - link "Web 访问分析" [ref=e23] [cursor=pointer]:
+        - /url: "#/access"
+      - link "System" [ref=e25] [cursor=pointer]:
+        - /url: "#/module/system"
+      - link "Docker" [ref=e26] [cursor=pointer]:
+        - /url: "#/module/docker"
+      - link "Cron" [ref=e27] [cursor=pointer]:
+        - /url: "#/module/cron"
+      - link "DDNS" [ref=e28] [cursor=pointer]:
+        - /url: "#/module/ddns"
+      - link "SSL" [ref=e29] [cursor=pointer]:
+        - /url: "#/module/ssl"
+      - link "WebTerminal" [ref=e30] [cursor=pointer]:
+        - /url: "#/module/webterminal"
+      - link "Rclone" [ref=e31] [cursor=pointer]:
+        - /url: "#/module/rclone"
+      - link "FileBrowser" [ref=e32] [cursor=pointer]:
+        - /url: "#/module/filebrowser"
+      - link "WOL" [ref=e33] [cursor=pointer]:
+        - /url: "#/module/wol"
+    - main [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Web 访问分析" [level=2] [ref=e37]
+          - generic [ref=e38]:
+            - button "访问分析" [active] [ref=e39] [cursor=pointer]
+            - button "访问明细" [ref=e40] [cursor=pointer]
+            - button "运行日志" [ref=e41] [cursor=pointer]
+        - generic [ref=e42]:
+          - combobox "规则" [ref=e43]:
+            - option "全部规则" [selected]
+            - option "443"
+            - option "80"
+            - option "Sync"
+            - option "Kopia 备份"
+            - option "Trilium 笔记"
+            - option "Trilium 笔记 复制"
+            - option "docker代理"
+            - option "panhub"
+            - option "在线白板"
+            - option "UnNamedRule"
+          - combobox "子代理" [ref=e44]:
+            - option "全部子代理" [selected]
+            - option "443 / 白板"
+            - option "443 / gitea"
+            - option "80 / 白板"
+            - option "80 / 笔记"
+            - option "80 / 笔记禁止登陆"
+            - option "80 / 音乐服务"
+            - option "80 / docker 镜像"
+            - option "80 / 反向代理：Git"
+            - option "80 / VoreGitea"
+            - option "80 / vikunja：todo清单"
+            - option "80 / omo"
+            - option "Sync / UnRemarkedSubRule"
+            - option "Kopia 备份 / Kopia"
+            - option "Trilium 笔记 / UnRemarkedSubRule"
+            - option "Trilium 笔记 复制 / UnRemarkedSubRule"
+            - option "docker代理 / UnRemarkedSubRule"
+            - option "panhub / UnRemarkedSubRule"
+            - option "在线白板 / UnRemarkedSubRule"
+            - option "UnNamedRule / UnRemarkedSubRule"
+          - combobox "域名" [ref=e45]:
+            - option "全部域名" [selected]
+            - option "omo.youlid.dpdns.org"
+            - option "note.youlid.dpdns.org"
+            - option "10.10.10.11"
+            - option "todo.youlid.dpdns.org"
+            - option "voregitea.youlid.dpdns.org"
+          - textbox "IP/路径关键词…" [ref=e46]
+          - button "查询" [ref=e47] [cursor=pointer]
+          - generic [ref=e48]: 实时快照每 30s 刷新
+        - generic [ref=e1459]:
+          - generic [ref=e1460]:
+            - generic [ref=e1461]: 总访问
+            - generic [ref=e1462]: "1238"
+            - generic [ref=e1463]: 访问日志条数
+          - generic [ref=e1464]:
+            - generic [ref=e1465]: 独立 IP
+            - generic [ref=e1466]: "490"
+            - generic [ref=e1467]: 去重后访问 IP
+          - generic [ref=e1468]:
+            - generic [ref=e1469]: 总流量
+            - generic [ref=e1470]: 13.80 MB
+            - generic [ref=e1471]: 出入合计 · 实时快照
+          - generic [ref=e1472]:
+            - generic [ref=e1473]: 连接数
+            - generic [ref=e1474]: "312"
+            - generic [ref=e1475]: 当前连接 · 实时快照
+        - generic [ref=e1476]:
+          - heading "访问趋势" [level=3] [ref=e1478]
+          - heading "地区分布" [level=3] [ref=e1482]
+          - heading "访问 IP 排行 Top15" [level=3] [ref=e1486]
+          - heading "浏览器分布" [level=3] [ref=e1490]
+          - heading "操作系统统计" [level=3] [ref=e1494]
+          - heading "来源类型（设备）" [level=3] [ref=e1498]
+          - heading "设备型号" [level=3] [ref=e1502]
+          - heading "访问路径 Top" [level=3] [ref=e1506]
+          - heading "域名 Host 分布" [level=3] [ref=e1510]
+          - heading "请求方法" [level=3] [ref=e1514]
+        - generic [ref=e1517]:
+          - heading "全部历史 IP（点击行查看该 IP 的访问明细）" [level=3] [ref=e1518]
+          - generic [ref=e1519]:
+            - textbox "按 IP 筛选…" [ref=e1520]
+            - button "查询" [ref=e1521] [cursor=pointer]
+            - generic [ref=e1522]: 共 490 个 IP
+          - table [ref=e1525]:
+            - rowgroup [ref=e1526]:
+              - row [ref=e1527]:
+                - columnheader "#" [ref=e1528]
+                - columnheader "IP" [ref=e1529]
+                - columnheader "归属地" [ref=e1530]
+                - columnheader "请求" [ref=e1531]
+                - columnheader "连接" [ref=e1532]
+                - columnheader "流量入/出" [ref=e1533]
+                - columnheader "最后访问" [ref=e1534]
+            - rowgroup [ref=e1535]:
+              - row [ref=e1536]:
+                - cell "1" [ref=e1537]
+                - cell "112.47.244.247" [ref=e1538]
+                - cell "福建省·泉州市" [ref=e1539]
+                - cell "27" [ref=e1540]
+                - cell "1" [ref=e1541]
+                - cell "2.2 KB / 11.4 KB" [ref=e1542]
+                - cell "2026/08/16 10:12:55" [ref=e1543]
+              - row [ref=e1544]:
+                - cell "2" [ref=e1545]
+                - cell "10.10.10.11" [ref=e1546]
+                - cell "内网/保留" [ref=e1547]
+                - cell "25" [ref=e1548]
+                - cell "6" [ref=e1549]
+                - cell "24.9 KB / 1.01 MB" [ref=e1550]
+                - cell "2026/08/16 04:29:10" [ref=e1551]
+              - row [ref=e1552]:
+                - cell "3" [ref=e1553]
+                - cell "112.111.205.174" [ref=e1554]
+                - cell "福建省·宁德市" [ref=e1555]
+                - cell "19" [ref=e1556]
+                - cell "1" [ref=e1557]
+                - cell "903 B / 830 B" [ref=e1558]
+                - cell "2026/08/16 04:30:06" [ref=e1559]
+              - row [ref=e1560]:
+                - cell "4" [ref=e1561]
+                - cell "111.18.145.120" [ref=e1562]
+                - cell "陕西省·西安市" [ref=e1563]
+                - cell "16" [ref=e1564]
+                - cell "1" [ref=e1565]
+                - cell "650 B / 415 B" [ref=e1566]
+                - cell "2026/08/16 12:25:28" [ref=e1567]
+              - row [ref=e1568]:
+                - cell "5" [ref=e1569]
+                - cell "39.149.162.2" [ref=e1570]
+                - cell "河南省·焦作市" [ref=e1571]
+                - cell "15" [ref=e1572]
+                - cell "0" [ref=e1573]
+                - cell "0 B / 0 B" [ref=e1574]
+                - cell "2026/08/16 00:03:09" [ref=e1575]
+              - row [ref=e1576]:
+                - cell "6" [ref=e1577]
+                - cell "162.158.123.39" [ref=e1578]
+                - cell "Madrid·Madrid" [ref=e1579]
+                - cell "13" [ref=e1580]
+                - cell "1" [ref=e1581]
+                - cell "450 B / 48.2 KB" [ref=e1582]
+                - cell "2026/08/16 12:34:00" [ref=e1583]
+              - row [ref=e1584]:
+                - cell "7" [ref=e1585]
+                - cell "115.210.72.91" [ref=e1586]
+                - cell "浙江省·金华市" [ref=e1587]
+                - cell "12" [ref=e1588]
+                - cell "2" [ref=e1589]
+                - cell "1.4 KB / 500 B" [ref=e1590]
+                - cell "2026/08/16 12:12:09" [ref=e1591]
+              - row [ref=e1592]:
+                - cell "8" [ref=e1593]
+                - cell "49.69.241.48" [ref=e1594]
+                - cell "江苏省·盐城市" [ref=e1595]
+                - cell "12" [ref=e1596]
+                - cell "1" [ref=e1597]
+                - cell "1.2 KB / 501 B" [ref=e1598]
+                - cell "2026/08/16 11:51:17" [ref=e1599]
+              - row [ref=e1600]:
+                - cell "9" [ref=e1601]
+                - cell "114.217.40.200" [ref=e1602]
+                - cell "江苏省·苏州市" [ref=e1603]
+                - cell "11" [ref=e1604]
+                - cell "0" [ref=e1605]
+                - cell "0 B / 0 B" [ref=e1606]
+                - cell "2026/08/16 04:00:31" [ref=e1607]
+              - row [ref=e1608]:
+                - cell "10" [ref=e1609]
+                - cell "104.22.100.32" [ref=e1610]
+                - cell "California" [ref=e1611]
+                - cell "10" [ref=e1612]
+                - cell "1" [ref=e1613]
+                - cell "519 B / 30.7 KB" [ref=e1614]
+                - cell "2026/08/16 12:10:00" [ref=e1615]
+              - row [ref=e1616]:
+                - cell "11" [ref=e1617]
+                - cell "124.160.210.185" [ref=e1618]
+                - cell "浙江省·杭州市" [ref=e1619]
+                - cell "10" [ref=e1620]
+                - cell "1" [ref=e1621]
+                - cell "629 B / 415 B" [ref=e1622]
+                - cell "2026/08/16 05:44:11" [ref=e1623]
+              - row [ref=e1624]:
+                - cell "12" [ref=e1625]
+                - cell "111.41.167.55" [ref=e1626]
+                - cell "黑龙江省·哈尔滨市" [ref=e1627]
+                - cell "9" [ref=e1628]
+                - cell "0" [ref=e1629]
+                - cell "0 B / 0 B" [ref=e1630]
+                - cell "2026/08/16 02:42:58" [ref=e1631]
+              - row [ref=e1632]:
+                - cell "13" [ref=e1633]
+                - cell "118.113.220.167" [ref=e1634]
+                - cell "四川省·成都市" [ref=e1635]
+                - cell "9" [ref=e1636]
+                - cell "1" [ref=e1637]
+                - cell "4.4 KB / 3.1 KB" [ref=e1638]
+                - cell "2026/08/16 06:43:32" [ref=e1639]
+              - row [ref=e1640]:
+                - cell "14" [ref=e1641]
+                - cell "162.158.127.179" [ref=e1642]
+                - cell "Quebec·Montreal" [ref=e1643]
+                - cell "9" [ref=e1644]
+                - cell "1" [ref=e1645]
+                - cell "416 B / 52.1 KB" [ref=e1646]
+                - cell "2026/08/16 12:23:00" [ref=e1647]
+              - row [ref=e1648]:
+                - cell "15" [ref=e1649]
+                - cell "172.69.109.100" [ref=e1650]
+                - cell "Duesseldorf·Duesseldorf District" [ref=e1651]
+                - cell "8" [ref=e1652]
+                - cell "1" [ref=e1653]
+                - cell "413 B / 49.0 KB" [ref=e1654]
+                - cell "2026/08/16 07:26:42" [ref=e1655]
+              - row [ref=e1656]:
+                - cell "16" [ref=e1657]
+                - cell "172.69.114.151" [ref=e1658]
+                - cell "Sao Paulo·Sao Paulo" [ref=e1659]
+                - cell "8" [ref=e1660]
+                - cell "1" [ref=e1661]
+                - cell "451 B / 48.6 KB" [ref=e1662]
+                - cell "2026/08/16 11:47:07" [ref=e1663]
+              - row [ref=e1664]:
+                - cell "17" [ref=e1665]
+                - cell "172.70.216.170" [ref=e1666]
+                - cell "Milan·Milan" [ref=e1667]
+                - cell "8" [ref=e1668]
+                - cell "1" [ref=e1669]
+                - cell "449 B / 48.3 KB" [ref=e1670]
+                - cell "2026/08/16 08:28:06" [ref=e1671]
+              - row [ref=e1672]:
+                - cell "18" [ref=e1673]
+                - cell "198.41.230.222" [ref=e1674]
+                - cell "Buenos Aires·Buenos Aires" [ref=e1675]
+                - cell "8" [ref=e1676]
+                - cell "1" [ref=e1677]
+                - cell "1.0 KB / 49.6 KB" [ref=e1678]
+                - cell "2026/08/16 12:16:30" [ref=e1679]
+              - row [ref=e1680]:
+                - cell "19" [ref=e1681]
+                - cell "1.183.248.93" [ref=e1682]
+                - cell "内蒙古·巴彦淖尔市" [ref=e1683]
+                - cell "7" [ref=e1684]
+                - cell "0" [ref=e1685]
+                - cell "0 B / 0 B" [ref=e1686]
+                - cell "2026/08/16 01:41:20" [ref=e1687]
+              - row [ref=e1688]:
+                - cell "20" [ref=e1689]
+                - cell "123.158.245.162" [ref=e1690]
+                - cell "浙江省·嘉兴市" [ref=e1691]
+                - cell "7" [ref=e1692]
+                - cell "0" [ref=e1693]
+                - cell "0 B / 0 B" [ref=e1694]
+                - cell "2026/08/16 03:47:48" [ref=e1695]
+              - row [ref=e1696]:
+                - cell "21" [ref=e1697]
+                - cell "162.158.116.110" [ref=e1698]
+                - cell "Rome·Citta metropolitana di Roma Capitale" [ref=e1699]
+                - cell "7" [ref=e1700]
+                - cell "1" [ref=e1701]
+                - cell "414 B / 49.8 KB" [ref=e1702]
+                - cell "2026/08/16 12:35:32" [ref=e1703]
+              - row [ref=e1704]:
+                - cell "22" [ref=e1705]
+                - cell "172.70.58.169" [ref=e1706]
+                - cell "Manchester·Manchester" [ref=e1707]
+                - cell "7" [ref=e1708]
+                - cell "1" [ref=e1709]
+                - cell "451 B / 52.8 KB" [ref=e1710]
+                - cell "2026/08/16 07:19:23" [ref=e1711]
+              - row [ref=e1712]:
+                - cell "23" [ref=e1713]
+                - cell "182.107.36.18" [ref=e1714]
+                - cell "江西省·九江市" [ref=e1715]
+                - cell "7" [ref=e1716]
+                - cell "0" [ref=e1717]
+                - cell "0 B / 0 B" [ref=e1718]
+                - cell "2026/08/16 00:31:25" [ref=e1719]
+              - row [ref=e1720]:
+                - cell "24" [ref=e1721]
+                - cell "183.145.109.156" [ref=e1722]
+                - cell "浙江省·绍兴市" [ref=e1723]
+                - cell "7" [ref=e1724]
+                - cell "0" [ref=e1725]
+                - cell "0 B / 0 B" [ref=e1726]
+                - cell "2026/08/16 00:13:03" [ref=e1727]
+              - row [ref=e1728]:
+                - cell "25" [ref=e1729]
+                - cell "183.60.225.228" [ref=e1730]
+                - cell "广东省·东莞市" [ref=e1731]
+                - cell "7" [ref=e1732]
+                - cell "0" [ref=e1733]
+                - cell "0 B / 0 B" [ref=e1734]
+                - cell "2026/08/16 09:34:49" [ref=e1735]
+              - row [ref=e1736]:
+                - cell "26" [ref=e1737]
+                - cell "104.22.176.5" [ref=e1738]
+                - cell "Singapore·Singapore" [ref=e1739]
+                - cell "6" [ref=e1740]
+                - cell "1" [ref=e1741]
+                - cell "843 B / 48.7 KB" [ref=e1742]
+                - cell "2026/08/16 11:17:06" [ref=e1743]
+              - row [ref=e1744]:
+                - cell "27" [ref=e1745]
+                - cell "104.22.23.49" [ref=e1746]
+                - cell "Madrid·Madrid" [ref=e1747]
+                - cell "6" [ref=e1748]
+                - cell "1" [ref=e1749]
+                - cell "417 B / 48.4 KB" [ref=e1750]
+                - cell "2026/08/16 11:42:05" [ref=e1751]
+              - row [ref=e1752]:
+                - cell "28" [ref=e1753]
+                - cell "104.23.254.128" [ref=e1754]
+                - cell "Sao Paulo·Sao Paulo" [ref=e1755]
+                - cell "6" [ref=e1756]
+                - cell "1" [ref=e1757]
+                - cell "793 B / 48.3 KB" [ref=e1758]
+                - cell "2026/08/16 09:42:16" [ref=e1759]
+              - row [ref=e1760]:
+                - cell "29" [ref=e1761]
+                - cell "108.162.210.169" [ref=e1762]
+                - cell "Florida·Miami" [ref=e1763]
+                - cell "6" [ref=e1764]
+                - cell "1" [ref=e1765]
+                - cell "792 B / 48.4 KB" [ref=e1766]
+                - cell "2026/08/16 10:35:52" [ref=e1767]
+              - row [ref=e1768]:
+                - cell "30" [ref=e1769]
+                - cell "111.23.213.95" [ref=e1770]
+                - cell "湖南省·岳阳市" [ref=e1771]
+                - cell "6" [ref=e1772]
+                - cell "0" [ref=e1773]
+                - cell "0 B / 0 B" [ref=e1774]
+                - cell "2026/08/16 00:25:53" [ref=e1775]
+              - row [ref=e1776]:
+                - cell "31" [ref=e1777]
+                - cell "139.199.162.133" [ref=e1778]
+                - cell "广东省·广州市" [ref=e1779]
+                - cell "6" [ref=e1780]
+                - cell "0" [ref=e1781]
+                - cell "0 B / 0 B" [ref=e1782]
+                - cell "2026/08/16 11:34:16" [ref=e1783]
+              - row [ref=e1784]:
+                - cell "32" [ref=e1785]
+                - cell "162.158.210.204" [ref=e1786]
+                - cell "Sofia-Capital·Sofia" [ref=e1787]
+                - cell "6" [ref=e1788]
+                - cell "1" [ref=e1789]
+                - cell "959 B / 48.4 KB" [ref=e1790]
+                - cell "2026/08/16 10:23:55" [ref=e1791]
+              - row [ref=e1792]:
+                - cell "33" [ref=e1793]
+                - cell "162.159.122.138" [ref=e1794]
+                - cell "Marseille·Arrondissement de Marseille" [ref=e1795]
+                - cell "6" [ref=e1796]
+                - cell "1" [ref=e1797]
+                - cell "794 B / 48.7 KB" [ref=e1798]
+                - cell "2026/08/16 07:48:31" [ref=e1799]
+              - row [ref=e1800]:
+                - cell "34" [ref=e1801]
+                - cell "172.68.205.233" [ref=e1802]
+                - cell "Manchester·Manchester" [ref=e1803]
+                - cell "6" [ref=e1804]
+                - cell "1" [ref=e1805]
+                - cell "1.3 KB / 145.4 KB" [ref=e1806]
+                - cell "2026/08/16 11:40:50" [ref=e1807]
+              - row [ref=e1808]:
+                - cell "35" [ref=e1809]
+                - cell "172.68.234.210" [ref=e1810]
+                - cell "Marseille·Arrondissement de Marseille" [ref=e1811]
+                - cell "6" [ref=e1812]
+                - cell "1" [ref=e1813]
+                - cell "455 B / 50.5 KB" [ref=e1814]
+                - cell "2026/08/16 11:20:50" [ref=e1815]
+              - row [ref=e1816]:
+                - cell "36" [ref=e1817]
+                - cell "175.149.153.114" [ref=e1818]
+                - cell "辽宁省·朝阳市" [ref=e1819]
+                - cell "6" [ref=e1820]
+                - cell "1" [ref=e1821]
+                - cell "3.9 KB / 66.0 KB" [ref=e1822]
+                - cell "2026/08/16 10:46:15" [ref=e1823]
+              - row [ref=e1824]:
+                - cell "37" [ref=e1825]
+                - cell "223.78.253.53" [ref=e1826]
+                - cell "山东省·潍坊市" [ref=e1827]
+                - cell "6" [ref=e1828]
+                - cell "1" [ref=e1829]
+                - cell "1.1 KB / 28.8 KB" [ref=e1830]
+                - cell "2026/08/16 08:06:33" [ref=e1831]
+              - row [ref=e1832]:
+                - cell "38" [ref=e1833]
+                - cell "223.96.45.29" [ref=e1834]
+                - cell "山东省·淄博市" [ref=e1835]
+                - cell "6" [ref=e1836]
+                - cell "1" [ref=e1837]
+                - cell "3.3 KB / 86.0 KB" [ref=e1838]
+                - cell "2026/08/16 08:16:02" [ref=e1839]
+              - row [ref=e1840]:
+                - cell "39" [ref=e1841]
+                - cell "81.71.94.236" [ref=e1842]
+                - cell "广东省·广州市" [ref=e1843]
+                - cell "6" [ref=e1844]
+                - cell "0" [ref=e1845]
+                - cell "0 B / 0 B" [ref=e1846]
+                - cell "2026/08/16 09:35:10" [ref=e1847]
+              - row [ref=e1848]:
+                - cell "40" [ref=e1849]
+                - cell "104.22.23.48" [ref=e1850]
+                - cell "Madrid·Madrid" [ref=e1851]
+                - cell "5" [ref=e1852]
+                - cell "1" [ref=e1853]
+                - cell "906 B / 96.6 KB" [ref=e1854]
+                - cell "2026/08/16 11:13:22" [ref=e1855]
+              - row [ref=e1856]:
+                - cell "41" [ref=e1857]
+                - cell "104.22.93.98" [ref=e1858]
+                - cell "California" [ref=e1859]
+                - cell "5" [ref=e1860]
+                - cell "1" [ref=e1861]
+                - cell "523 B / 48.3 KB" [ref=e1862]
+                - cell "2026/08/16 11:59:22" [ref=e1863]
+              - row [ref=e1864]:
+                - cell "42" [ref=e1865]
+                - cell "106.52.249.139" [ref=e1866]
+                - cell "广东省·广州市" [ref=e1867]
+                - cell "5" [ref=e1868]
+                - cell "0" [ref=e1869]
+                - cell "0 B / 0 B" [ref=e1870]
+                - cell "2026/08/16 09:35:10" [ref=e1871]
+              - row [ref=e1872]:
+                - cell "43" [ref=e1873]
+                - cell "112.50.182.169" [ref=e1874]
+                - cell "福建省·三明市" [ref=e1875]
+                - cell "5" [ref=e1876]
+                - cell "1" [ref=e1877]
+                - cell "1.1 KB / 65.6 KB" [ref=e1878]
+                - cell "2026/08/16 11:00:19" [ref=e1879]
+              - row [ref=e1880]:
+                - cell "44" [ref=e1881]
+                - cell "113.6.181.39" [ref=e1882]
+                - cell "黑龙江省·齐齐哈尔市" [ref=e1883]
+                - cell "5" [ref=e1884]
+                - cell "1" [ref=e1885]
+                - cell "1.1 KB / 501 B" [ref=e1886]
+                - cell "2026/08/16 11:09:53" [ref=e1887]
+              - row [ref=e1888]:
+                - cell "45" [ref=e1889]
+                - cell "117.183.240.116" [ref=e1890]
+                - cell "广西·桂林市" [ref=e1891]
+                - cell "5" [ref=e1892]
+                - cell "1" [ref=e1893]
+                - cell "466 B / 415 B" [ref=e1894]
+                - cell "2026/08/16 11:10:32" [ref=e1895]
+              - row [ref=e1896]:
+                - cell "46" [ref=e1897]
+                - cell "124.95.117.163" [ref=e1898]
+                - cell "辽宁省·本溪市" [ref=e1899]
+                - cell "5" [ref=e1900]
+                - cell "0" [ref=e1901]
+                - cell "0 B / 0 B" [ref=e1902]
+                - cell "2026/08/15 23:39:20" [ref=e1903]
+              - row [ref=e1904]:
+                - cell "47" [ref=e1905]
+                - cell "14.152.91.139" [ref=e1906]
+                - cell "广东省·东莞市" [ref=e1907]
+                - cell "5" [ref=e1908]
+                - cell "0" [ref=e1909]
+                - cell "0 B / 0 B" [ref=e1910]
+                - cell "2026/08/16 09:34:48" [ref=e1911]
+              - row [ref=e1912]:
+                - cell "48" [ref=e1913]
+                - cell "162.158.123.38" [ref=e1914]
+                - cell "Madrid·Madrid" [ref=e1915]
+                - cell "5" [ref=e1916]
+                - cell "1" [ref=e1917]
+                - cell "415 B / 48.4 KB" [ref=e1918]
+                - cell "2026/08/16 11:14:35" [ref=e1919]
+              - row [ref=e1920]:
+                - cell "49" [ref=e1921]
+                - cell "172.70.108.128" [ref=e1922]
+                - cell "Marseille·Arrondissement de Marseille" [ref=e1923]
+                - cell "5" [ref=e1924]
+                - cell "1" [ref=e1925]
+                - cell "793 B / 50.8 KB" [ref=e1926]
+                - cell "2026/08/16 08:39:36" [ref=e1927]
+              - row [ref=e1928]:
+                - cell "50" [ref=e1929]
+                - cell "172.70.108.129" [ref=e1930]
+                - cell "Marseille·Arrondissement de Marseille" [ref=e1931]
+                - cell "5" [ref=e1932]
+                - cell "1" [ref=e1933]
+                - cell "433 B / 48.1 KB" [ref=e1934]
+                - cell "2026/08/16 08:04:53" [ref=e1935]
+          - generic [ref=e1937]:
+            - button "‹" [disabled] [ref=e1938]
+            - generic [ref=e1939]: 1 / 10
+            - button "›" [ref=e1940] [cursor=pointer]

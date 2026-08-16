@@ -148,20 +148,17 @@ async function loadStats() {
 }
 
 async function loadDetail() {
-  const p = new URLSearchParams(accessParams())
-  p.set('search', detailSearch.value)
-  p.set('ip', detailIp.value)
-  p.set('path', detailPath.value)
+  const p = new URLSearchParams(qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value }))
   p.set('page', page.value); p.set('page_size', pageSize)
   detail.value = await api(`/api/access/logs?${p}`)
 }
 
 async function loadRuntime() {
-  const p = new URLSearchParams({
+  const p = new URLSearchParams(qp({
     instance: store.instance, module: 'webservice', level: 'rule',
     from_epoch: store.from, to_epoch: store.to, dedup: 'off',
     page: runtimePage.value, page_size: 100,
-  })
+  }))
   runtime.value = await api(`/api/logs?${p}`)
 }
 
@@ -192,7 +189,8 @@ const regionChart = computed(() => {
   return { labels: rows.map((r) => r.region), datasets: [{ data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
 })
 function donutOf(rows) {
-  return { labels: (rows || []).map((r) => r.name), datasets: [{ data: (rows || []).map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
+  rows = rows || []
+  return { labels: rows.map((r) => r.name), datasets: [{ data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
 }
 const browserChart = computed(() => donutOf(stats.value?.browsers))
 const osChart = computed(() => donutOf(stats.value?.os))
@@ -214,8 +212,19 @@ const methodChart = computed(() => {
   return { labels: rows.map((r) => r.name), datasets: [{ label: '次数', data: rows.map((r) => r.count), backgroundColor: paletteOf(rows.length) }] }
 })
 
-// IP 排行明细表
-const ipRows = computed(() => (stats.value?.top_ips || []).map((r, i) => ({ id: r.k, rank: i + 1, client_ip: r.k, ...r })))
+// IP 排行明细表（全部历史 IP，分页）
+const ipList = ref({ total: 0, items: [] })
+const ipPage = ref(1)
+const ipSearch = ref('')
+const ipPageSize = 50
+
+async function loadIpList() {
+  const p = new URLSearchParams(qp({ ...accessParams(), search: ipSearch.value }))
+  p.set('page', ipPage.value); p.set('page_size', ipPageSize)
+  ipList.value = await api(`/api/access/ips?${p}`)
+}
+
+const ipTotalPages = computed(() => Math.max(1, Math.ceil(ipList.value.total / ipPageSize)))
 const ipColDefs = [
   { key: 'rank', label: '#', render: (r) => esc(r.rank) },
   { key: 'ip', label: 'IP', cls: 'mono', render: (r) => esc(r.client_ip) },
@@ -225,6 +234,16 @@ const ipColDefs = [
   { key: 'traffic', label: '流量入/出', render: (r) => `${fmtBytes(r.traffic_in)} / ${fmtBytes(r.traffic_out)}` },
   { key: 'last', label: '最后访问', render: (r) => (r.last_access ? fmtEpoch(r.last_access) : '—') },
 ]
+function ipRows(pageItems) {
+  const base = (ipPage.value - 1) * ipPageSize
+  return pageItems.map((r, i) => ({ id: r.client_ip, rank: base + i + 1, ...r }))
+}
+function gotoIpDetail(row) {
+  detailIp.value = row.client_ip
+  tab.value = 'detail'
+  page.value = 1
+  loadDetail()
+}
 
 function bucketLabel(bucket) {
   const d = new Date(bucket * 1000)
@@ -249,7 +268,7 @@ let off = null
 loadCols()
 onMounted(async () => {
   await loadServices()
-  await Promise.all([loadStats(), loadDetail(), loadRuntime()])
+  await Promise.all([loadStats(), loadDetail(), loadRuntime(), loadIpList()])
   off = onRealtime((msg) => {
     if (msg.type !== 'logs' || !Array.isArray(msg.items)) return
     const incoming = msg.items.filter((r) => r.instance === store.instance && r.sub_key)
@@ -259,8 +278,8 @@ onMounted(async () => {
     }
   })
 })
-watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime() })
-watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail() })
+watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
+watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail(); loadIpList() })
 onBeforeUnmount(() => off && off())
 </script>
 
@@ -313,9 +332,21 @@ onBeforeUnmount(() => off && off())
         <div class="card"><h3>请求方法</h3><div class="wrap"><ChartBox type="bar" :labels="methodChart.labels" :datasets="methodChart.datasets" :options="barOptions()" /></div></div>
       </div>
       <div class="card ip-rank">
-        <h3>IP 排行明细（点击行查看详情）</h3>
+        <h3>全部历史 IP（点击行查看该 IP 的访问明细）</h3>
+        <div class="ip-toolbar">
+          <input v-model="ipSearch" placeholder="按 IP 筛选…" @keydown.enter="ipPage = 1; loadIpList()">
+          <button @click="ipPage = 1; loadIpList()">查询</button>
+          <span>共 {{ ipList.total }} 个 IP</span>
+        </div>
         <div class="ip-table">
-          <LogTable :rows="ipRows" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id" @row-click="selected = $event" />
+          <LogTable :rows="ipRows(ipList.items)" :column-defs="ipColDefs" :row-tooltip="rowTip" row-key="id" @row-click="gotoIpDetail" />
+        </div>
+        <div class="foot">
+          <div class="pager">
+            <button :disabled="ipPage <= 1" @click="ipPage--; loadIpList()">‹</button>
+            <span>{{ ipPage }} / {{ ipTotalPages }}</span>
+            <button :disabled="ipPage >= ipTotalPages" @click="ipPage++; loadIpList()">›</button>
+          </div>
         </div>
       </div>
     </template>
@@ -392,7 +423,9 @@ onBeforeUnmount(() => off && off())
 .table-card { margin-bottom: 12px; }
 .table-card :deep(.table-wrap) { height: 460px; }
 .ip-rank { margin-top: 12px; }
-.ip-table :deep(.table-wrap) { height: 320px; }
+.ip-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ip-toolbar span { color: var(--muted); font-size: 12px; }
+.ip-table :deep(.table-wrap) { height: 360px; }
 .foot { display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
 .pager { display: flex; gap: 8px; align-items: center; }
 .colset-wrap { position: relative; }

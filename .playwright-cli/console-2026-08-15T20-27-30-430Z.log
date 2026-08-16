@@ -1,0 +1,52 @@
+[      54ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'length')
+    at bt (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:59620)
+    at hd.fn (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:59661)
+    at vu (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:3490)
+    at get value (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:14337)
+    at Proxy.<anonymous> (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:64477)
+    at tl (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:18378)
+    at mu.L [as fn] (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:28244)
+    at mu.run (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2077)
+    at Z (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:28629)
+    at Mt (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:27289) @ http://127.0.0.1:8666/assets/index-DqSNeh_U.js:12
+[      77ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'labels')
+    at Proxy.<anonymous> (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:64483)
+    at tl (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:18378)
+    at mu.L [as fn] (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:27803)
+    at mu.run (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2077)
+    at mu.runIfDirty (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2387)
+    at _i (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:46)
+    at Fu (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:1860) @ http://127.0.0.1:8666/assets/index-DqSNeh_U.js:12
+[      78ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'labels')
+    at Proxy.<anonymous> (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:64483)
+    at tl (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:18378)
+    at mu.L [as fn] (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:27803)
+    at mu.run (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2077)
+    at mu.runIfDirty (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2387)
+    at _i (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:46)
+    at Fu (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:1860) @ http://127.0.0.1:8666/assets/index-DqSNeh_U.js:12
+[      85ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8666/api/access/logs?instance=lucky-main&rule=&sub=&host=&from_epoch=null&to_epoch=null&search=&ip=&path=&page=1&page_size=100:0
+[      85ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://127.0.0.1:8666/api/logs?instance=lucky-main&module=webservice&level=rule&from_epoch=null&to_epoch=null&dedup=off&page=1&page_size=100:0
+[      94ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8666/favicon.ico:0
+[      94ms] Error: HTTP 422 /api/access/logs?instance=lucky-main&rule=&sub=&host=&from_epoch=null&to_epoch=null&search=&ip=&path=&page=1&page_size=100
+    at xe (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:39200)
+    at async it (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:58050)
+[      95ms] Error: HTTP 422 /api/logs?instance=lucky-main&module=webservice&level=rule&from_epoch=null&to_epoch=null&dedup=off&page=1&page_size=100
+    at xe (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:39200)
+    at async Mt (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:58267)
+[     103ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'labels')
+    at Proxy.<anonymous> (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:64483)
+    at tl (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:18378)
+    at mu.L [as fn] (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:27803)
+    at mu.run (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2077)
+    at mu.runIfDirty (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2387)
+    at _i (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:46)
+    at Fu (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:1860) @ http://127.0.0.1:8666/assets/index-DqSNeh_U.js:12
+[     119ms] [ERROR] TypeError: Cannot read properties of undefined (reading 'labels')
+    at Proxy.<anonymous> (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:43:64483)
+    at tl (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:18378)
+    at mu.L [as fn] (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:27803)
+    at mu.run (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2077)
+    at mu.runIfDirty (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:9:2387)
+    at _i (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:46)
+    at Fu (http://127.0.0.1:8666/assets/index-DqSNeh_U.js:13:1860) @ http://127.0.0.1:8666/assets/index-DqSNeh_U.js:12

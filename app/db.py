@@ -532,6 +532,58 @@ class Database:
         )
         return row["c"] if row else 0
 
+    async def access_ips(
+        self,
+        instance: str | None = None, rule_key: str | None = None, sub_key: str | None = None,
+        host: str | None = None, from_epoch: int | None = None, to_epoch: int | None = None,
+        search: str | None = None, page: int = 1, page_size: int = 50,
+    ) -> dict[str, Any]:
+        """全部历史 IP（去重），按访问次数倒序分页，附带流量快照。"""
+        conds: list[str] = []
+        params: list = []
+        if instance:
+            conds.append("instance=?")
+            params.append(instance)
+        if rule_key:
+            conds.append("rule_key=?")
+            params.append(rule_key)
+        if sub_key:
+            conds.append("sub_key=?")
+            params.append(sub_key)
+        if host:
+            conds.append("host=?")
+            params.append(host)
+        if from_epoch is not None:
+            conds.append("ts_epoch>=?")
+            params.append(from_epoch)
+        if to_epoch is not None:
+            conds.append("ts_epoch<=?")
+            params.append(to_epoch)
+        if search:
+            conds.append("client_ip LIKE ? ESCAPE '\\'")
+            params.append(f"%{_escape_like(search)}%")
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        page = max(1, page)
+        page_size = min(200, max(1, page_size))
+        offset = (page - 1) * page_size
+        total = (await self._fetchone(
+            f"SELECT COUNT(*) AS c FROM (SELECT 1 FROM access_logs {where} GROUP BY client_ip)",
+            params,
+        ))["c"]
+        rows = await self._fetchall(
+            f"SELECT client_ip, COUNT(*) AS count, MAX(ts_epoch) AS last_access "
+            f"FROM access_logs {where} GROUP BY client_ip "
+            f"ORDER BY count DESC, client_ip LIMIT ? OFFSET ?",
+            params + [page_size, offset],
+        )
+        traffic = await self.traffic_map(instance, sub_key)
+        for r in rows:
+            t = traffic.get(r["client_ip"], {})
+            r["connections"] = t.get("connections", 0)
+            r["traffic_in"] = t.get("traffic_in", 0)
+            r["traffic_out"] = t.get("traffic_out", 0)
+        return {"total": total, "page": page, "page_size": page_size, "items": rows}
+
     async def _access_export_rows(
         self,
         instance: str | None, rule_key: str | None, sub_key: str | None,

@@ -37,7 +37,7 @@ async function loadServices() {
 async function loadLogs() {
   loading.value = true
   try {
-    const p = new URLSearchParams(baseParams())
+    const p = new URLSearchParams(qp(baseParams()))
     p.set('dedup', dedup.value); p.set('page', page.value); p.set('page_size', pageSize)
     const d = await api(`/api/logs?${p}`)
     data.value = d
@@ -47,7 +47,7 @@ async function loadLogs() {
 }
 
 async function loadStats() {
-  const p = new URLSearchParams(baseParams())
+  const p = new URLSearchParams(qp(baseParams()))
   p.set('granularity', 'hour')
   const s = await api(`/api/stats?${p}`)
   timeline.value = s.timeline || []
@@ -70,7 +70,7 @@ const logColDefs = [
 ]
 
 function exportLogs(fmt) {
-  const p = new URLSearchParams(baseParams())
+  const p = new URLSearchParams(qp(baseParams()))
   p.set('dedup', dedup.value); p.set('format', fmt)
   window.location.href = `/api/export?${p}`
 }

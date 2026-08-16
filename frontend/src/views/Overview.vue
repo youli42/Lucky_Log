@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { api, esc } from '../api'
+import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
 import KpiCard from '../components/KpiCard.vue'
@@ -76,8 +76,8 @@ async function loadAll() {
   loading.value = true
   try {
     const [ov, ac, instData] = await Promise.all([
-      api(`/api/overview?${new URLSearchParams(params())}`),
-      api(`/api/access/stats?${new URLSearchParams(params())}`),
+      api(`/api/overview?${qp(params())}`),
+      api(`/api/access/stats?${qp(params())}`),
       api('/api/instances'),
     ])
     overview.value = ov
@@ -90,7 +90,7 @@ async function loadAll() {
 }
 
 async function loadLogs(reset) {
-  const p = new URLSearchParams(params())
+  const p = new URLSearchParams(qp(params()))
   p.set('page', 1); p.set('page_size', 50); p.set('dedup', 'off')
   const data = await api(`/api/logs?${p}`)
   logTotal.value = data.total
