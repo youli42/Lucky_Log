@@ -5,7 +5,7 @@
 子代理层日志 `/api/webservice/{ruleKey}/{subKey}/logs`，`LogContent` 为内嵌 JSON（`ExtInfo`）：
 
 ```json
-{"ExtInfo":{"ClientIP":"114.217.40.200","Host":"omo.youlid.dpdns.org",
+{"ExtInfo":{"ClientIP":"203.0.113.1","Host":"www.example.com",
   "Method":"GET","URL":"/favicon.ico",
   "UserAgent":"Mozilla/5.0 (Linux; Android 11; V2068A) ... VivoBrowser/30.3.0.0"}}
 ```
@@ -23,7 +23,7 @@
 | 字段 | 说明 |
 |---|---|
 | instance / rule_key / rule_name / sub_key / sub_name | 实例与归属服务 |
-| host | 访问域名（如 omo.youlid.dpdns.org） |
+| host | 访问域名（如 www.example.com） |
 | ts_epoch / ts_text | 访问时间 |
 | client_ip | 访问 IP |
 | method / path | 请求方法 / 路径 |

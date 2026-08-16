@@ -314,7 +314,7 @@ onUnmounted(() => {
       <h3>{{ isNew ? '新增实例' : '编辑实例' }}</h3>
       <div class="form-grid">
         <div class="form-row"><label>名称 *</label><input v-model="editing.name" placeholder="如 lucky-main"></div>
-        <div class="form-row"><label>地址 *</label><input v-model="editing.host" placeholder="10.10.10.11"></div>
+        <div class="form-row"><label>地址 *</label><input v-model="editing.host" placeholder="192.168.1.100"></div>
         <div class="form-row"><label>端口</label><input v-model="editing.port" style="width:110px"></div>
         <div class="form-row"><label>Base 路径</label><input v-model="editing.base" style="width:160px" placeholder="/youlilucky"></div>
         <div class="form-row"><label>协议</label>

@@ -44,7 +44,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "instances": [
         {
             "name": "lucky-main",
-            "host": "10.10.10.11",
+            "host": "192.168.1.100",
             "port": "16601",
             "base": "/youlilucky",
             "token": "",

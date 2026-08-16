@@ -19,10 +19,10 @@ OpenToken 可直接替代登录，获得管理员全权限。
 
 ```bash
 # ① Header
-curl -k https://10.10.10.11:16601/youlilucky/api/status -H "OpenToken: TOKEN"
+curl -k https://192.168.1.100:16601/youlilucky/api/status -H "OpenToken: TOKEN"
 
 # ② URL 参数
-curl -k "https://10.10.10.11:16601/youlilucky/api/status?openToken=TOKEN"
+curl -k "https://192.168.1.100:16601/youlilucky/api/status?openToken=TOKEN"
 
 # ③ WebSocket 参数
 wss://host:port/youlilucky/api/status/ws?Lucky-Admin-Token=TOKEN
@@ -117,12 +117,12 @@ wss://host:port/youlilucky/api/status/ws?Lucky-Admin-Token=TOKEN
 
 ```json
 {"list": [
-  {"Key": "JUmyAIaSfMmMI5C7", "Name": "443",
+  {"Key": "RULE_KEY_A", "Name": "443",
    "SubRuleList": [
-     {"Key": "6Q5b5MccKUCHRRCu", "Name": "白板"},
-     {"Key": "QxZig0egMuVdITPO", "Name": "gitea"}
+     {"Key": "SUB_KEY_A1", "Name": "白板"},
+     {"Key": "SUB_KEY_A2", "Name": "gitea"}
    ]},
-  {"Key": "Od3DlnYNbKKrFVmf", "Name": "Sync", "SubRuleList": [...]}
+  {"Key": "RULE_KEY_B", "Name": "Sync", "SubRuleList": [...]}
 ]}
 ```
 

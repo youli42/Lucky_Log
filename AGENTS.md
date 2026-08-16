@@ -63,7 +63,7 @@ Lucky_Log/
 
 ## 目标实例（开发期默认）
 
-- `https://10.10.10.11:16601/youlilucky/api`
+- `https://192.168.1.100:16601/youlilucky/api`
 - OpenToken: 见 `config.json`（或用户配置）
 
 ## 注意事项

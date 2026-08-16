@@ -11,7 +11,7 @@ UA_MOBILE = "Mozilla/5.0 (Linux; Android 11; V2068A) AppleWebKit/537.36 (KHTML, 
 UA_PC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 13.6; rv:132.0) Gecko/20100101 Firefox/132.0"
 
 
-def _access_rec(ip="114.217.40.200", host="omo.example.com", url="/favicon.ico", method="GET", ua=UA_PC):
+def _access_rec(ip="198.51.100.7", host="omo.example.com", url="/favicon.ico", method="GET", ua=UA_PC):
     return {
         "LogContent": json.dumps({
             "ExtInfo": {"ClientIP": ip, "Host": host, "Method": method, "URL": url, "UserAgent": ua},
@@ -23,7 +23,7 @@ def _access_rec(ip="114.217.40.200", host="omo.example.com", url="/favicon.ico",
 
 def test_parse_extinfo():
     ext = parse_extinfo(_access_rec()["LogContent"])
-    assert ext["ClientIP"] == "114.217.40.200"
+    assert ext["ClientIP"] == "198.51.100.7"
     assert ext["URL"] == "/favicon.ico"
     assert parse_extinfo("not json") is None
     assert parse_extinfo(json.dumps({"no": "extinfo"})) is None
@@ -31,7 +31,7 @@ def test_parse_extinfo():
 
 def test_parse_access_row_mobile():
     row = parse_access_row("inst", _access_rec(ua=UA_MOBILE), rule_key="rk", sub_key="sk")
-    assert row["client_ip"] == "114.217.40.200"
+    assert row["client_ip"] == "198.51.100.7"
     assert row["method"] == "GET"
     assert row["path"] == "/favicon.ico"
     assert row["browser"] == "VivoBrowser"
@@ -76,7 +76,7 @@ def test_geoip_private():
 
 
 def test_geoip_public():
-    r = province("114.217.40.200")
+    r = province("198.51.100.7")
     assert isinstance(r, str) and r
 
 
@@ -85,7 +85,7 @@ def test_geoip_short_private():
 
 
 def test_geoip_short_public():
-    r = geo_short("114.217.40.200")
+    r = geo_short("198.51.100.7")
     assert isinstance(r, str) and r
 
 
@@ -118,7 +118,7 @@ async def test_insert_access_dedup_and_query(db):
     assert st["unique_ips"] == 2
     q = await db.query_access_logs(instance="inst", sub_key="sk")
     assert q["total"] == 2
-    assert q["items"][0]["client_ip"] in ("114.217.40.200", "2.2.2.2")
+    assert q["items"][0]["client_ip"] in ("198.51.100.7", "2.2.2.2")
 
 
 async def test_access_stats_groups(db):

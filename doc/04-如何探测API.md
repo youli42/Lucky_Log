@@ -11,13 +11,13 @@
 
 ```bash
 # 探测入口页
-curl -k -i https://10.10.10.11:16601/youlilucky/
+curl -k -i https://192.168.1.100:16601/youlilucky/
 # → 200, HTML: <title>Lucky</title>, src=./static/js/lucky_index-*.js
 
 # 确认版本与登录态校验
-curl -k https://10.10.10.11:16601/youlilucky/version
-curl -k https://10.10.10.11:16601/youlilucky/api/status          # 无 token → {"msg":"login invalid","ret":-1}
-curl -k https://10.10.10.11:16601/youlilucky/api/status -H "OpenToken: TOKEN"  # 成功
+curl -k https://192.168.1.100:16601/youlilucky/version
+curl -k https://192.168.1.100:16601/youlilucky/api/status          # 无 token → {"msg":"login invalid","ret":-1}
+curl -k https://192.168.1.100:16601/youlilucky/api/status -H "OpenToken: TOKEN"  # 成功
 ```
 
 ## 2. 静态分析前端 JS（发现接口全貌）
