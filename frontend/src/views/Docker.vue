@@ -4,7 +4,7 @@ import { api, esc, fmtEpoch } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { fmtBytes } from '../utils'
-import { notify } from '../notify'
+import { notifyError } from '../notify'
 import EmptyState from '../components/EmptyState.vue'
 
 const tab = ref('containers')
@@ -16,7 +16,6 @@ const volumes = ref([])
 const fetchedAt = ref(0)
 const detail = ref(null)       // {cid, stats, processes}
 const logs = ref('')
-const error = ref('')
 const busy = ref(null)         // cid:action 操作中
 let timer = null
 let lastInstance = ''
@@ -51,7 +50,7 @@ const kpis = computed(() => [
 ])
 
 async function loadSnapshot() {
-  try { applySnap(await apiGet('/api/docker/snapshot')) } catch (e) { error.value = `加载失败: ${e.message}` }
+  try { applySnap(await apiGet('/api/docker/snapshot')) } catch (e) { notifyError('Docker 快照加载失败', e, 'docker-load') }
 }
 
 async function refreshAll() {
@@ -60,7 +59,7 @@ async function refreshAll() {
     const s = await api(`/api/docker/refresh?${q}`, { method: 'POST' })
     applySnap(s)
   } catch (e) {
-    error.value = `刷新失败: ${e.message}`
+    notifyError('Docker 刷新失败', e, 'docker-load')
   }
 }
 
@@ -69,7 +68,7 @@ async function loadDetail(cid) {
     detail.value = { cid, ...(await apiGet(`/api/docker/container/${encodeURIComponent(cid)}`)) }
     await loadLogs(cid)
   } catch (e) {
-    error.value = `详情加载失败: ${e.message}`
+    notifyError('容器详情加载失败', e, 'docker-load')
   }
 }
 async function loadLogs(cid) {
@@ -87,7 +86,7 @@ async function control(cid, action) {
     await refreshAll()
     if (detail.value && detail.value.cid === cid) await loadDetail(cid)
   } catch (e) {
-    error.value = `操作失败: ${e.message}`
+    notifyError(`容器操作失败（${action}）`, e, 'docker-load')
   } finally {
     busy.value = null
   }
@@ -115,7 +114,7 @@ async function silentAutoRefresh() {
       notify({ type: 'info', message: `Docker 容器数变化: ${prev} → ${containers.value.length}`, key: 'docker-auto-refresh', minInterval: 30000 })
     }
   } catch (e) {
-    notify({ type: 'error', message: `Docker 自动刷新失败: ${e.message}`, key: 'docker-auto-refresh-err', minInterval: 30000 })
+    notifyError('Docker 自动刷新失败', e, 'docker-auto-refresh-err')
   }
 }
 
@@ -192,7 +191,6 @@ onBeforeUnmount(() => clearInterval(timer))
       <span v-if="fetchedAt" class="hint">快照更新于 {{ fmtEpoch(fetchedAt) }}</span>
       <span class="hint">自动刷新 {{ store.refreshInterval || '关' }}s（设置中统一配置）</span>
       <router-link to="/module/docker" class="hint link">Docker 模块日志</router-link>
-      <span v-if="error" class="err">{{ error }}</span>
     </div>
 
     <div class="kpis">

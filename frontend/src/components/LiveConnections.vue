@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api, esc, fmtEpoch, qp } from '../api'
 import { fmtBytes } from '../utils'
-import { notify } from '../notify'
+import { notifyError } from '../notify'
 
 const props = defineProps({ instance: { type: String, required: true } })
 const emit = defineEmits(['close'])
@@ -21,10 +21,10 @@ async function load() {
     cooldown.value = 0
   } catch (e) {
     error.value = e.message
-    // 429 = 冷却中，提示等待
+    // 429 = 冷却中，局部提示等待（非错误通知）
     const m = String(e.message)
     if (m.includes('429')) cooldown.value = 10
-    else notify({ type: 'error', message: `连接详情加载失败: ${m}` })
+    else notifyError('连接详情加载失败', e, 'live-conn')
   } finally {
     loading.value = false
   }

@@ -4,10 +4,9 @@ import { api } from '../api'
 import { store } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { fmtBytes } from '../utils'
-import { notify } from '../notify'
+import { notify, notifyError } from '../notify'
 
 const data = ref(null)
-const error = ref('')
 const busyId = ref(null)
 let timer = null
 
@@ -19,9 +18,8 @@ function fmtRate(b) {
 async function load() {
   try {
     data.value = await api(`/api/smb/overview?instance=${encodeURIComponent(store.instance)}`)
-    error.value = ''
   } catch (e) {
-    error.value = `加载失败: ${e.message}`
+    notifyError('SMB 状态加载失败', e, 'smb-load')
   }
 }
 
@@ -41,7 +39,7 @@ async function disconnect(conn) {
     await api(`/api/smb/connections/${encodeURIComponent(conn.connID)}/disconnect?instance=${encodeURIComponent(store.instance)}`, { method: 'POST' })
     await load()
   } catch (e) {
-    error.value = `断开失败: ${e.message}`
+    notifyError('SMB 断开连接失败', e, 'smb-load')
   } finally {
     busyId.value = null
   }
@@ -69,7 +67,6 @@ onBeforeUnmount(() => clearInterval(timer))
 <template>
   <div>
     <div class="head"><h2>SMB 运行状态</h2><span class="hint">自动刷新 {{ store.refreshInterval || '关' }}s（设置中统一配置）</span></div>
-    <div v-if="error" class="err">{{ error }}</div>
 
     <div class="kpis">
       <div class="kpi"><div class="title">服务状态</div><div class="value" :style="{ color: summary().enabled ? 'var(--green)' : 'var(--muted)' }">{{ summary().enabled ? '已启用' : '未启用' }}</div><div class="sub">{{ summary().errMsg || (summary().running ? '运行中' : '未运行') }}</div></div>

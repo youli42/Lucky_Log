@@ -5,6 +5,7 @@ import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { PALETTE, donutOptions, lineOptions, barOptions, paletteOf } from '../charts'
 import { bucketLabel, fmtBytes, granularityFor } from '../utils'
+import { notifyError } from '../notify'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
@@ -97,20 +98,26 @@ async function loadAll() {
     access.value = ac
     inst.value = (instData.instances || []).find((i) => i.name === store.instance)
     await loadLogs(true)
+  } catch (e) {
+    notifyError('总览加载失败', e, 'overview-load')
   } finally {
     loading.value = false
   }
 }
 
 async function loadLogs(reset) {
-  const p = new URLSearchParams(qp(params()))
-  p.set('page', logPage.value)
-  p.set('page_size', logPageSize.value === 'all' ? 50000 : logPageSize.value)
-  p.set('dedup', 'off')
-  p.set('sort', logSort.key); p.set('sort_dir', logSort.dir)
-  const data = await api(`/api/logs?${p}`)
-  logTotal.value = data.total
-  logs.value = data.items
+  try {
+    const p = new URLSearchParams(qp(params()))
+    p.set('page', logPage.value)
+    p.set('page_size', logPageSize.value === 'all' ? 50000 : logPageSize.value)
+    p.set('dedup', 'off')
+    p.set('sort', logSort.key); p.set('sort_dir', logSort.dir)
+    const data = await api(`/api/logs?${p}`)
+    logTotal.value = data.total
+    logs.value = data.items
+  } catch (e) {
+    notifyError('日志加载失败', e, 'overview-load')
+  }
 }
 
 function onLogSort(key, dir) { logSort.key = key; logSort.dir = dir; logPage.value = 1; loadLogs(true) }

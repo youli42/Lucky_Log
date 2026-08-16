@@ -6,6 +6,7 @@ import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { lineOptions, paletteOf } from '../charts'
 import { bucketLabel, granularityFor } from '../utils'
+import { notifyError } from '../notify'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -33,8 +34,12 @@ const baseParams = () => ({
 
 async function loadServices() {
   if (module.value !== 'webservice') return
-  const s = await api(`/api/services?instance=${encodeURIComponent(store.instance)}`)
-  services.value = s.counts || []
+  try {
+    const s = await api(`/api/services?instance=${encodeURIComponent(store.instance)}`)
+    services.value = s.counts || []
+  } catch (e) {
+    notifyError('服务列表加载失败', e, 'module-load')
+  }
 }
 
 async function loadLogs() {
@@ -46,16 +51,22 @@ async function loadLogs() {
     p.set('sort', sort.key); p.set('sort_dir', sort.dir)
     const d = await api(`/api/logs?${p}`)
     data.value = d
+  } catch (e) {
+    notifyError('日志加载失败', e, 'module-load')
   } finally {
     loading.value = false
   }
 }
 
 async function loadStats() {
-  const p = new URLSearchParams(qp(baseParams()))
-  p.set('granularity', granularityFor(store.timeRange, store.rangeSpan))
-  const s = await api(`/api/stats?${p}`)
-  timeline.value = s.timeline || []
+  try {
+    const p = new URLSearchParams(qp(baseParams()))
+    p.set('granularity', granularityFor(store.timeRange, store.rangeSpan))
+    const s = await api(`/api/stats?${p}`)
+    timeline.value = s.timeline || []
+  } catch (e) {
+    notifyError('趋势统计加载失败', e, 'module-load')
+  }
 }
 
 const timeline = ref([])

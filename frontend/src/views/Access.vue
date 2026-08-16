@@ -5,7 +5,7 @@ import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
 import { bucketLabel, fmtBytes, granularityFor } from '../utils'
-import { notify } from '../notify'
+import { notify, notifyError } from '../notify'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
@@ -146,8 +146,12 @@ const accessParams = () => ({
 })
 
 async function loadServices() {
-  const s = await api(`/api/services?instance=${encodeURIComponent(store.instance)}`)
-  services.value = s.tree || []
+  try {
+    const s = await api(`/api/services?instance=${encodeURIComponent(store.instance)}`)
+    services.value = s.tree || []
+  } catch (e) {
+    notifyError('服务列表加载失败', e, 'access-load')
+  }
 }
 
 async function loadStats(silent = false) {
@@ -158,6 +162,9 @@ async function loadStats(silent = false) {
     stats.value = await api(`/api/access/stats?${qp(accessParams())}`)
     lastStatsAt.value = Math.floor(Date.now() / 1000)
     return prevTotal
+  } catch (e) {
+    notifyError('访问统计加载失败', e, 'access-load')
+    return null
   } finally {
     if (!silent) loading.value = false
   }
@@ -181,20 +188,28 @@ function pageSizeVal(v) {
 }
 
 async function loadDetail() {
-  const p = new URLSearchParams(qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value }))
-  p.set('page', page.value); p.set('page_size', pageSizeVal(pageSize.value))
-  p.set('sort', sort.key); p.set('sort_dir', sort.dir)
-  detail.value = await api(`/api/access/logs?${p}`)
+  try {
+    const p = new URLSearchParams(qp({ ...accessParams(), search: detailSearch.value, ip: detailIp.value, path: detailPath.value }))
+    p.set('page', page.value); p.set('page_size', pageSizeVal(pageSize.value))
+    p.set('sort', sort.key); p.set('sort_dir', sort.dir)
+    detail.value = await api(`/api/access/logs?${p}`)
+  } catch (e) {
+    notifyError('访问明细加载失败', e, 'access-load')
+  }
 }
 
 async function loadRuntime() {
-  const p = new URLSearchParams(qp({
-    instance: store.instance, module: 'webservice', level: 'rule',
-    from_epoch: store.from, to_epoch: store.to, dedup: 'off',
-    page: runtimePage.value, page_size: pageSizeVal(runtimePageSize.value),
-  }))
-  p.set('sort', runtimeSort.key); p.set('sort_dir', runtimeSort.dir)
-  runtime.value = await api(`/api/logs?${p}`)
+  try {
+    const p = new URLSearchParams(qp({
+      instance: store.instance, module: 'webservice', level: 'rule',
+      from_epoch: store.from, to_epoch: store.to, dedup: 'off',
+      page: runtimePage.value, page_size: pageSizeVal(runtimePageSize.value),
+    }))
+    p.set('sort', runtimeSort.key); p.set('sort_dir', runtimeSort.dir)
+    runtime.value = await api(`/api/logs?${p}`)
+  } catch (e) {
+    notifyError('运行日志加载失败', e, 'access-load')
+  }
 }
 
 // ---- 分析图表 ----
@@ -256,14 +271,18 @@ const ipPageSize = ref(32)
 const ipSort = reactive({ key: 'count', dir: 'desc' })
 
 async function loadIpList() {
-  const p = new URLSearchParams(qp({ ...accessParams(), search: ipSearch.value }))
-  p.set('sort', ipSort.key); p.set('sort_dir', ipSort.dir)
-  if (ipPageSize.value === 'all') {
-    p.set('limit', 50000)
-  } else {
-    p.set('page', ipPage.value); p.set('page_size', ipPageSize.value)
+  try {
+    const p = new URLSearchParams(qp({ ...accessParams(), search: ipSearch.value }))
+    p.set('sort', ipSort.key); p.set('sort_dir', ipSort.dir)
+    if (ipPageSize.value === 'all') {
+      p.set('limit', 50000)
+    } else {
+      p.set('page', ipPage.value); p.set('page_size', ipPageSize.value)
+    }
+    ipList.value = await api(`/api/access/ips?${p}`)
+  } catch (e) {
+    notifyError('IP 排行加载失败', e, 'access-load')
   }
-  ipList.value = await api(`/api/access/ips?${p}`)
 }
 
 const ipTotalPages = computed(() => Math.max(1, Math.ceil(ipList.value.total / (Number(ipPageSize.value) || 1))))

@@ -4,6 +4,7 @@ import { api, fmtEpoch, qp } from '../api'
 import { refreshInstances, store } from '../store'
 import { MODULE_LABELS } from '../modules'
 import { fmtBytes } from '../utils'
+import { notifyError } from '../notify'
 
 const cfg = ref(null)
 const allModules = ref([])
@@ -56,7 +57,7 @@ async function collectInstance(name) {
     await api(`/api/collect?instance=${encodeURIComponent(name)}`, { method: 'POST' })
     await poll()
   } catch (e) {
-    err.value = `采集触发失败: ${e.message}`
+    notifyError('采集触发失败', e, 'settings-err')
   }
 }
 
@@ -65,7 +66,7 @@ async function collectAllInst() {
     await api('/api/collect/all', { method: 'POST' })
     await poll()
   } catch (e) {
-    err.value = `采集触发失败: ${e.message}`
+    notifyError('采集触发失败', e, 'settings-err')
   }
 }
 
@@ -170,7 +171,7 @@ async function putConfig() {
     store.refreshInterval = cfg.value.refresh_interval ?? 10
     toast()
   } catch (e) {
-    err.value = `保存失败: ${e.message}`
+    notifyError('配置保存失败', e, 'settings-err')
   }
 }
 
@@ -185,7 +186,7 @@ async function doDelete() {
     purgeDel.value = false
     toast()
   } catch (e) {
-    err.value = `删除失败: ${e.message}`
+    notifyError('删除失败', e, 'settings-err')
   }
 }
 

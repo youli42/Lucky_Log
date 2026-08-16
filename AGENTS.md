@@ -73,7 +73,8 @@ Lucky_Log/
 
 - **定时自动刷新一律静默**：不切换 loading 遮罩、不重建组件，仅替换数据（`ChartBox.vue` 已按 props 响应式平滑 `chart.update()`，无闪烁）。
 - 自动刷新**仅在有意义的变化时**通过全局通知 `notify()`（`frontend/src/notify.js`）弹右上角提示（ToastHost 渲染），并**必须带 `key` + `minInterval` 限频**（如 30s），禁止逐次刷新都弹窗。
-- 刷新失败用 `notify({ type: 'error', ... })`；手动刷新 / 切换实例等用户主动操作的反馈用 `useDataRefresh(reload, { notifyMessage, notifyKey, notifyMinInterval })`。
+- 手动刷新 / 切换实例等用户主动操作的反馈用 `useDataRefresh(reload, { notifyMessage, notifyKey, notifyMinInterval })`。
+- **所有报错必须走统一通知**：用 `notifyError(label, err, key)`（error 类型**常驻不自动消失**、右上角可点击**复制**错误内容、10s 限频防连发）；禁止仅 console 输出或只写在页面角落，也禁止在视图内自造错误弹层。表单校验类提示（如"名称为空"）可保留局部 err 文案。
 - 禁止自造弹窗 / `alert` / 其他全局提示；新视图接入自动刷新或实时数据时必须遵守本约定。
 - 实时数据接口（如 `GET /api/access/connections`）由后端节流（`Collector.live_allowed`，10s 冷却），前端遇 429 时展示冷却提示，不要绕过重试。
 

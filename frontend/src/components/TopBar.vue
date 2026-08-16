@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { fmtEpoch } from '../api'
 import { refreshInstances, setTimeRange, store, toggleRealtime, triggerRefresh } from '../store'
+import { notifyError } from '../notify'
 
 const instInfo = ref('')
 const ranges = [
@@ -41,7 +42,11 @@ function toEpoch(v) {
 }
 
 onMounted(async () => {
-  await refreshInstances()
+  try {
+    await refreshInstances()
+  } catch (e) {
+    notifyError('实例列表加载失败', e, 'topbar-load')
+  }
   if (store.from == null) setTimeRange(store.timeRange)
   renderInstInfo()
 })
