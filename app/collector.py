@@ -462,7 +462,9 @@ class Collector:
                         if ts < old:
                             continue
                         row = normalize_record(
-                            inst.name, module, rec, rule_key, rule_name, sub_key, sub_name
+                            inst.name, module, rec,
+                            rule_key=rule_key, rule_name=rule_name,
+                            sub_key=sub_key, sub_name=sub_name,
                         )
                         page_ts.append(ts)
                         if ts > newest:

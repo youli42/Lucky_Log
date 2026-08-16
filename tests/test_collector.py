@@ -2,7 +2,9 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.collector import normalize_record
+from app.collector import Collector, normalize_record
+from app.config import AppConfig
+from app.db import Database
 from app.routes import stream
 from app.timeutil import parse_lucky_ts
 
@@ -39,6 +41,39 @@ def test_normalize_system_record_bad_ns():
     row = normalize_record("inst", "system", rec, ts_field="time", content_field="log")
     assert row is not None
     assert row["ts_epoch"] == 1786820400
+
+
+async def test_poll_unified_normalizes_records(tmp_path):
+    """回归：_poll_unified 真实调用路径（非 ns 分支）必须能归一化入库。
+
+    曾因 normalize_record 改 keyword-only 后旧位置参数调用未同步而崩
+    （takes 3 positional arguments but 7 were given）。
+    """
+    cfg = AppConfig.model_validate({"instances": [{"name": "a", "host": "h", "port": "1", "token": "t"}]})
+    db = Database(str(tmp_path / "t.db"))
+    await db.connect()
+    col = Collector(cfg, db)
+
+    class FakeOK:
+        async def get_log_page(self, path, page, page_size):
+            return {
+                "logs": [
+                    {"LogTime": "2026/08/16 03:00:00", "LogContent": "hello"},
+                    {"LogTime": "2026/08/16 03:01:00", "LogContent": "world"},
+                ],
+                "total": 2, "page": 1, "page_size": page_size,
+            }
+
+    col._clients["a"] = FakeOK()
+    inserted, acc = await col._poll_unified(cfg.instances[0], "docker", "/api/docker/logs")
+    assert inserted == 2
+    rows = await db.query_logs(instance="a")
+    assert rows["total"] == 2
+    assert rows["items"][0]["content"] == "world"
+    # 游标推进
+    cur = await db.get_cursor("a", "docker", "", "")
+    assert cur["last_ts"] == 1786820460
+    await db.close()
 
 
 class FakeCollector:
