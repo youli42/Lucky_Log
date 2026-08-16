@@ -21,3 +21,8 @@ export function bucketLabel(bucket, granularity = 'hour') {
   if (granularity === 'day') return `${d.getMonth() + 1}/${d.getDate()}`
   return `${String(d.getHours()).padStart(2, '0')}:00`
 }
+
+/** 按时间范围自动选择趋势粒度：≥3 天用天粒度（避免 7d 下 168 个点挤成一团且无日期）。 */
+export function granularityFor(range) {
+  return range === '7d' || range === '30d' ? 'day' : 'hour'
+}

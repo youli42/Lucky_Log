@@ -5,6 +5,7 @@ import { api, esc, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { lineOptions, paletteOf } from '../charts'
+import { bucketLabel, granularityFor } from '../utils'
 import ChartBox from '../components/ChartBox.vue'
 import LogTable from '../components/LogTable.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -52,16 +53,19 @@ async function loadLogs() {
 
 async function loadStats() {
   const p = new URLSearchParams(qp(baseParams()))
-  p.set('granularity', 'hour')
+  p.set('granularity', granularityFor(store.timeRange))
   const s = await api(`/api/stats?${p}`)
   timeline.value = s.timeline || []
 }
 
 const timeline = ref([])
-const timelineChart = computed(() => ({
-  labels: timeline.value.map((b) => `${new Date(b.bucket * 1000).getHours()}:00`),
-  datasets: [{ label: '日志数', data: timeline.value.map((b) => b.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
-}))
+const timelineChart = computed(() => {
+  const g = granularityFor(store.timeRange)
+  return {
+    labels: timeline.value.map((b) => bucketLabel(b.bucket, g)),
+    datasets: [{ label: '日志数', data: timeline.value.map((b) => b.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
+  }
+})
 
 const totalPages = computed(() => Math.max(1, Math.ceil(data.value.total / (Number(pageSize.value) || 1))))
 const modLabel = computed(() => String(module.value))

@@ -88,3 +88,29 @@ def test_live_connections_404_and_cooldown():
         assert c.get("/api/access/connections?instance=a").status_code == 200
         r = c.get("/api/access/connections?instance=a")  # 冷却 → 429
         assert r.status_code == 429
+
+
+def test_live_connections_tree_404_returns_empty():
+    """服务树接口 404（实例 webservice 无规则页）→ 返回空结果而非 500。"""
+
+    class Tree404Client(FakeClient):
+        async def fetch_service_tree(self):
+            raise _Fake404()
+
+    class Collector404(FakeCollector):
+        def get_client(self, inst):
+            return Tree404Client(inst)
+
+    cfg = AppConfig.model_validate({
+        "instances": [{"name": "a", "host": "h", "port": "1", "token": "t"}],
+    })
+    app = FastAPI()
+    app.include_router(access_router.router)
+    app.state.config = cfg
+    app.state.collector = Collector404(cfg)
+    with TestClient(app) as c:
+        r = c.get("/api/access/connections?instance=a")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["services"] == []
+        assert body["total_connections"] == 0

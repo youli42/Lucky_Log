@@ -197,7 +197,20 @@ async def live_connections(request: Request, instance: str = Query(...)):
     client = collector.get_client(inst)
     tree = collector.service_tree(instance)
     if not tree:  # 服务树未预热时现拉（复用采集端逻辑）
-        tree = await client.fetch_service_tree()
+        try:
+            tree = await client.fetch_service_tree()
+        except LuckyError as e:
+            if e.status == 404:  # 实例 webservice 无规则页 → 无连接可查，返回空
+                return {
+                    "instance": instance,
+                    "fetched_at": int(time.time()),
+                    "total_connections": 0,
+                    "total_ips": 0,
+                    "traffic_in": 0,
+                    "traffic_out": 0,
+                    "services": [],
+                }
+            raise
 
     services: list[dict] = []
     total_connections = total_ips = 0

@@ -4,7 +4,7 @@ import { api, esc, fmtEpoch, qp } from '../api'
 import { store, onRealtime } from '../store'
 import { useDataRefresh } from '../composables/useDataRefresh'
 import { donutOptions, barOptions, lineOptions, paletteOf } from '../charts'
-import { bucketLabel, fmtBytes } from '../utils'
+import { bucketLabel, fmtBytes, granularityFor } from '../utils'
 import { notify } from '../notify'
 import KpiCard from '../components/KpiCard.vue'
 import ChartBox from '../components/ChartBox.vue'
@@ -142,6 +142,7 @@ const accessParams = () => ({
   from_epoch: store.from,
   to_epoch: store.to,
   search: search.value,
+  granularity: granularityFor(store.timeRange),
 })
 
 async function loadServices() {
@@ -206,8 +207,9 @@ const kpis = computed(() => [
 
 const trendChart = computed(() => {
   const rows = stats.value?.timeline || []
+  const g = granularityFor(store.timeRange)
   return {
-    labels: rows.map((r) => bucketLabel(r.bucket)),
+    labels: rows.map((r) => bucketLabel(r.bucket, g)),
     datasets: [{ label: '访问', data: rows.map((r) => r.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.15)', fill: true, tension: .3, pointRadius: 1 }],
   }
 })

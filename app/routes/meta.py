@@ -65,10 +65,11 @@ async def overview(
     instance: Optional[str] = None,
     from_epoch: Optional[int] = None,
     to_epoch: Optional[int] = None,
+    granularity: str = "hour",
 ):
     db = _get_db(request)
     by_module = await db.stats_by_module(instance, from_epoch, to_epoch)
-    timeline = await db.stats_timeline(instance, None, from_epoch, to_epoch, "hour")
+    timeline = await db.stats_timeline(instance, None, from_epoch, to_epoch, granularity)
     by_service = await db.stats_by_service(instance, from_epoch, to_epoch)
     access_total = 0
     total_logs = 0
