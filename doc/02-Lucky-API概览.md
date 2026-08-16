@@ -67,6 +67,18 @@ wss://host:port/youlilucky/api/status/ws?Lucky-Admin-Token=TOKEN
 ### Docker
 `/api/docker/`：`info` `containers` `images` `volumes` `networks` `logs` `version` `config` `tasks` `self-container` `container-groups` `registry/mirrors`，Compose 子模块 `compose/*`。
 
+Docker 面板关键只读端点（实测）：
+| 端点 | 说明 |
+|---|---|
+| `/api/docker/info` | 主机概况（容器运行/暂停/停止、镜像数、Driver、OS） |
+| `/api/docker/version` | Engine/containerd 版本 |
+| `/api/docker/containers` | 容器列表（Id/Names/Image/Command/Created/State/Status/Ports/Mounts/Labels/compose_project） |
+| `/api/docker/containers/stats-cached` | **批量实时资源**（每容器 cpu%/内存/网络/块IO+速率） |
+| `/api/docker/containers/{id}/stats` `/processes` `/logs` | 单容器资源 / 进程 / 日志（纯文本） |
+| `/api/docker/images` | 镜像（RepoTags/Size/Architecture/Created/Containers） |
+| `/api/docker/networks` `/volumes` | 网络 / 卷 |
+| `/api/docker/containers/{id}/start\|stop\|restart\|pause\|unpause`（均 POST） | 容器控制（stop/restart 带 `timeout`） |
+
 ### 网络服务
 | 模块 | 关键接口 |
 |---|---|

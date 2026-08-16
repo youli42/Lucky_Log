@@ -37,6 +37,7 @@ const cfg = computed(() => {
   <nav class="sidebar">
     <router-link to="/overview" class="item" active-class="active">总览大屏</router-link>
     <router-link to="/access" class="item" active-class="active">Web 访问分析</router-link>
+    <router-link to="/docker" class="item" active-class="active">Docker</router-link>
     <div class="divider"></div>
     <router-link
       v-for="m in cfg" :key="m.name"
