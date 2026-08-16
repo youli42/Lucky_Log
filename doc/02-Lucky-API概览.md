@@ -122,9 +122,8 @@ Docker 面板关键只读端点（实测）：
 | 模块 | 日志端点 | 备注 |
 |---|---|---|
 | coraza | `/api/coraza/logs` | 多空 |
-| portforward | `/api/portforward/logs` | 多为空 |
-| stun | `/api/stun/logs` | 多为空 |
 | iconlib | `/api/iconlib/logs` | 图标库，偶有日志 |
+| portforward / stun | `/logs` 返回 `ret=1` 业务错误 | **无实际日志端点，不采集** |
 | acme / securitygroups / logscenter / ipfilter | 目标当前未启用（404） | 启用后可配模块采集 |
 
 ### WebTerminal

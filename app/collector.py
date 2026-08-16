@@ -48,9 +48,8 @@ SINGLE_SOURCES: dict[str, str] = {
     # Lucky 3.0.0 新增模块
     "smb": "/api/smb/logs",
     "coraza": "/api/coraza/logs",
-    "portforward": "/api/portforward/logs",
     "iconlib": "/api/iconlib/logs",
-    "stun": "/api/stun/logs",
+    # 注：portforward/stun 的 /logs 返回 ret=1 业务错误（无日志端点），不采集
 }
 
 # webservice 按规则源（游标 LogTime）

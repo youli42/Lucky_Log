@@ -65,11 +65,8 @@ async function loadSnapshot() {
 
 async function refreshAll() {
   try {
-    const s = await api('/api/docker/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(D()),
-    })
+    const q = new URLSearchParams(D())
+    const s = await api(`/api/docker/refresh?${q}`, { method: 'POST' })
     applySnap(s)
   } catch (e) {
     error.value = `刷新失败: ${e.message}`
