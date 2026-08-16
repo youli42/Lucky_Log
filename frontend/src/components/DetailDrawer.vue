@@ -38,7 +38,7 @@ const sections = computed(() => {
         ['省份', it.province || '—'],
         ['城市', it.city || '—'],
         ['ISP 运营商', it.isp || '—'],
-        ['连接数', it.connections ?? '—'],
+        ['连接数(快照)', it.connections ?? '—'],
         ['流量入', fmtBytes(it.traffic_in)],
         ['流量出', fmtBytes(it.traffic_out)],
         ['最后访问', it.last_access ? fmtEpoch(it.last_access) : '—'],

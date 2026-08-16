@@ -28,6 +28,8 @@ const runtimePage = ref(1)
 const loading = ref(false)
 const selected = ref(null)
 const showCols = ref(false)
+const lastStatsAt = ref(null)
+let statsTimer = null
 
 function fmtBytes(b) {
   if (b == null) return '—'
@@ -142,6 +144,7 @@ async function loadStats() {
   loading.value = true
   try {
     stats.value = await api(`/api/access/stats?${qp(accessParams())}`)
+    lastStatsAt.value = Math.floor(Date.now() / 1000)
   } finally {
     loading.value = false
   }
@@ -166,8 +169,8 @@ async function loadRuntime() {
 const kpis = computed(() => [
   { title: '总访问', value: stats.value?.total ?? 0, sub: '访问日志条数', accent: 'var(--accent)' },
   { title: '独立 IP', value: stats.value?.unique_ips ?? 0, sub: '去重后访问 IP', accent: 'var(--green)' },
-  { title: '总流量', value: fmtBytes((stats.value?.traffic?.traffic_in || 0) + (stats.value?.traffic?.traffic_out || 0)), sub: '出入合计 · 实时快照', accent: 'var(--yellow)' },
-  { title: '连接数', value: stats.value?.traffic?.connections ?? 0, sub: '当前连接 · 实时快照', accent: 'var(--red)' },
+  { title: '总流量', value: fmtBytes((stats.value?.traffic?.traffic_in || 0) + (stats.value?.traffic?.traffic_out || 0)), sub: '累计流量 · 快照', accent: 'var(--yellow)' },
+  { title: '连接数', value: stats.value?.traffic?.connections ?? 0, sub: `accessdetail 快照 · 30s 自动刷新`, accent: 'var(--red)' },
 ])
 
 const trendChart = computed(() => {
@@ -269,6 +272,7 @@ loadCols()
 onMounted(async () => {
   await loadServices()
   await Promise.all([loadStats(), loadDetail(), loadRuntime(), loadIpList()])
+  statsTimer = setInterval(() => loadStats(), 30000)
   off = onRealtime((msg) => {
     if (msg.type !== 'logs' || !Array.isArray(msg.items)) return
     const incoming = msg.items.filter((r) => r.instance === store.instance && r.sub_key)
@@ -280,7 +284,7 @@ onMounted(async () => {
 })
 watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
 watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail(); loadIpList() })
-onBeforeUnmount(() => off && off())
+onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) })
 </script>
 
 <template>
@@ -311,7 +315,7 @@ onBeforeUnmount(() => off && off())
       </select>
       <input v-model="search" placeholder="IP/路径关键词…" @keydown.enter="page = 1; loadStats()">
       <button @click="page = 1; loadStats()">查询</button>
-      <span class="hint">实时快照每 30s 刷新</span>
+      <span class="hint">快照每 30s 更新{{ lastStatsAt ? ' · 更新于 ' + fmtEpoch(lastStatsAt) : '' }}</span>
     </div>
 
     <!-- Tab 1: 访问分析 -->
