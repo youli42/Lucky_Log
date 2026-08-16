@@ -129,6 +129,7 @@ onMounted(() => {
   })
 })
 watch(() => [store.instance, store.from, store.to], loadAll)
+watch(() => store.refreshTick, loadAll)
 onBeforeUnmount(() => off && off())
 </script>
 

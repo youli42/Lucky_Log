@@ -95,6 +95,7 @@ onMounted(async () => {
   })
 })
 watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadLogs(); loadStats(); loadServices() })
+watch(() => store.refreshTick, () => { loadLogs(); loadStats() })
 watch(service, () => { page.value = 1; loadLogs(); loadStats() })
 onBeforeUnmount(() => off && off())
 </script>

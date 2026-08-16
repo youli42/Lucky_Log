@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { api, fmtEpoch } from '../api'
-import { nowEpoch, setTimeRange, store, toggleRealtime } from '../store'
+import { nowEpoch, setTimeRange, store, toggleRealtime, triggerRefresh } from '../store'
 
 const instInfo = ref('')
 const ranges = [
@@ -48,7 +48,7 @@ function toEpoch(v) {
   return Math.floor(new Date(v).getTime() / 1000)
 }
 
-const emit = defineEmits(['range-change', 'refresh'])
+const emit = defineEmits(['range-change'])
 onMounted(async () => {
   await loadInstances()
   if (store.from == null) setTimeRange(store.timeRange)
@@ -75,7 +75,7 @@ onMounted(async () => {
     <button :class="{ on: store.realtime }" class="rt" @click="toggleRealtime()">
       实时: {{ store.realtime ? '开' : '关' }}
     </button>
-    <button @click="emit('refresh')">手动刷新</button>
+    <button v-if="!store.realtime" class="refresh" @click="triggerRefresh()">手动刷新</button>
     <span class="info" v-html="instInfo"></span>
   </header>
 </template>

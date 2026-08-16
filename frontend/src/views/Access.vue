@@ -313,6 +313,7 @@ onMounted(async () => {
   })
 })
 watch(() => [store.instance, store.from, store.to], () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
+watch(() => store.refreshTick, () => { page.value = 1; loadServices(); loadStats(); loadDetail(); loadRuntime(); loadIpList() })
 watch([rule, sub, host, search], () => { page.value = 1; loadStats(); loadDetail(); loadIpList() })
 onBeforeUnmount(() => { off && off(); if (statsTimer) clearInterval(statsTimer) })
 </script>

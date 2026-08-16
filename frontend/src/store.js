@@ -11,8 +11,13 @@ export const store = reactive({
   to: null,
   realtime: false,
   ws: null,
+  refreshTick: 0,
   _listeners: [],
 })
+
+export function triggerRefresh() {
+  store.refreshTick += 1
+}
 
 export function nowEpoch() {
   return Math.floor(Date.now() / 1000)
