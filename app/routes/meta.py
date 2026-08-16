@@ -48,6 +48,9 @@ async def list_instances(request: Request):
         info["source_total"] = st.get("total", 0)
         info["collected_rows"] = st.get("collected_rows", 0)
         info["started_at"] = st.get("started_at", 0)
+        info["fail_count"] = st.get("fail_count", 0)
+        info["backoff_until"] = st.get("backoff_until", 0)
+        info["next_retry_in"] = st.get("next_retry_in", 0)
         stats = await db.instance_stats(inst.name)
         info["total"] = stats["total"]
         info["access"] = await db.access_instance_total(inst.name)

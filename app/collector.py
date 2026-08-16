@@ -192,12 +192,9 @@ class Collector:
         now = time.time()
         if inst.name in self._trees and now - self._tree_ts.get(inst.name, 0) < TREE_REFRESH_SECONDS:
             return self._trees[inst.name]
-        try:
-            tree = await self._client(inst).fetch_service_tree()
-            self._trees[inst.name] = tree
-            self._tree_ts[inst.name] = now
-        except LuckyError:
-            tree = self._trees.get(inst.name, [])
+        tree = await self._client(inst).fetch_service_tree()
+        self._trees[inst.name] = tree
+        self._tree_ts[inst.name] = now
         return tree
 
     def service_tree(self, instance: str) -> list[dict[str, Any]]:
@@ -210,7 +207,7 @@ class Collector:
         return {
             "last_collect": 0, "last_error": None, "collecting": False,
             "current": "", "page": 0, "total": 0, "collected_rows": 0,
-            "started_at": 0,
+            "started_at": 0, "fail_count": 0, "backoff_until": 0, "next_retry_in": 0,
         }
 
     def _status(self, inst: InstanceConfig) -> dict[str, Any]:
@@ -230,18 +227,46 @@ class Collector:
 
     async def _run_loop(self) -> None:
         interval = max(2, self.cfg.collect_interval)
-        logger.info("采集器启动，间隔 %ss", interval)
+        logger.info(
+            "采集器启动，间隔 %ss，退避 base=%s max=%s max_retries=%s",
+            interval, self.cfg.backoff.base, self.cfg.backoff.max, self.cfg.backoff.max_retries,
+        )
         while self._running:
-            started = time.time()
             try:
                 await self._collect_once()
             except Exception as e:  # noqa: BLE001
                 logger.exception("采集循环异常: %s", e)
-            # 固定间隔轮询，给目标留出喘息空间；一轮超时也不连续补跑
-            await asyncio.sleep(interval)
+            # 全部实例退避中时睡到最早可重试时刻，避免空转；否则固定间隔
+            await asyncio.sleep(self._next_sleep(interval))
+
+    def _backoff_seconds(self, fail_count: int) -> int:
+        """指数退避：base×2^(n-1)，超过 max_retries 进入长冷却（=max）；±20% 抖动后封顶 max。"""
+        import random
+
+        b = self.cfg.backoff
+        if fail_count <= b.max_retries:
+            secs = b.base * (2 ** (fail_count - 1))
+        else:
+            secs = b.max
+        return max(1, min(b.max, int(secs * random.uniform(0.8, 1.2))))
+
+    def _next_sleep(self, interval: int) -> int:
+        """若所有启用实例都在退避中，睡到最早可重试时刻；否则固定间隔。"""
+        now = time.time()
+        enabled = {i.name for i in self.cfg.enabled_instances()}
+        if not enabled:
+            return interval
+        retries = [
+            st.get("backoff_until", 0) - now
+            for name, st in self.status.items()
+            if name in enabled and st.get("backoff_until", 0) > now
+        ]
+        if len(retries) == len(enabled) and retries:
+            return max(1, int(min(retries)))
+        return interval
 
     async def _run_instance(self, inst: InstanceConfig) -> None:
-        """采集单个实例（防重入）：记录进度与结果。"""
+        """采集单个实例（防重入）：失败进入指数退避。"""
         if inst.name in self._collecting:
             return
         self._collecting.add(inst.name)
@@ -256,20 +281,33 @@ class Collector:
             await self._collect_instance(inst)
             st["last_collect"] = int(time.time())
             st["last_error"] = None
+            st["fail_count"] = 0
+            st["backoff_until"] = 0
+            st["next_retry_in"] = 0
         except Exception as e:  # noqa: BLE001
-            logger.exception("[%s] 采集失败: %s", inst.name, e)
+            st["fail_count"] = st.get("fail_count", 0) + 1
+            backoff = self._backoff_seconds(st["fail_count"])
+            st["backoff_until"] = int(time.time()) + backoff
+            st["next_retry_in"] = backoff
             st["last_error"] = str(e)
+            logger.error("[%s] 采集失败(第%d次, 退避%ss): %s", inst.name, st["fail_count"], backoff, e)
         finally:
             st["collecting"] = False
             st["current"] = ""
             self._collecting.discard(inst.name)
 
     async def _collect_once(self) -> None:
-        instances = self.cfg.enabled_instances()
+        instances = [
+            i for i in self.cfg.enabled_instances()
+            if self.status.get(i.name, {}).get("backoff_until", 0) <= time.time()
+        ]
+
         async def guarded(inst: InstanceConfig) -> None:
             async with self._instance_sem:
                 await self._run_instance(inst)
-        await asyncio.gather(*(guarded(i) for i in instances))
+
+        if instances:
+            await asyncio.gather(*(guarded(i) for i in instances))
 
     def collect_now(self, name: str) -> bool:
         """立即采集指定实例（异步任务）。已在采/不存在返回 False。"""
@@ -393,7 +431,7 @@ class Collector:
         except LuckyError as e:
             await self.db.save_cursor(inst.name, module, rule_key, sub_key, error=str(e))
             logger.warning("[%s] %s/%s 采集错误: %s", inst.name, module, sub_key or rule_key, e)
-            return 0, 0
+            raise
 
     async def _poll_single(self, inst: InstanceConfig, module: str, path: str) -> None:
         if module == "system":
@@ -471,6 +509,7 @@ class Collector:
                 logger.debug("[%s] %s accessdetail %d IP", inst.name, sub_key, len(rows))
         except LuckyError as e:
             logger.warning("[%s] %s accessdetail 错误: %s", inst.name, sub_key, e)
+            raise
 
     # ---------- 广播（WebSocket 实时推送） ----------
 

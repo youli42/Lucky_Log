@@ -24,7 +24,11 @@ _GLOBAL_SEMAPHORE = asyncio.Semaphore(2)
 
 
 class LuckyError(Exception):
-    """Lucky API 调用异常（HTTP/网络/业务码）。"""
+    """Lucky API 调用异常（HTTP/网络/业务码）。status 为 HTTP 状态码，网络/业务错误为 None。"""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 class LuckyClient:
@@ -58,7 +62,7 @@ class LuckyClient:
                     await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
                     continue
             if resp.status_code != 200:
-                last_err = LuckyError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                last_err = LuckyError(f"HTTP {resp.status_code}: {resp.text[:200]}", status=resp.status_code)
                 # 4xx 不重试（模块未启用 404 等），5xx/网络类重试
                 if 400 <= resp.status_code < 500:
                     raise last_err

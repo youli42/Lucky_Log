@@ -57,6 +57,11 @@ function statusFor(name) {
   return instStats.value.find((i) => i.name === name) || {}
 }
 
+function isBackoff(name) {
+  const st = statusFor(name)
+  return !st.collecting && st.backoff_until > Math.floor(Date.now() / 1000)
+}
+
 async function collectInstance(name) {
   try {
     await api(`/api/collect?instance=${encodeURIComponent(name)}`, { method: 'POST' })
@@ -229,6 +234,15 @@ onUnmounted(() => {
         <span class="hint">天</span>
       </div>
       <div class="form-row">
+        <label>失败退避</label>
+        <input v-model.number="cfg.backoff.base" type="number" min="1" style="width:70px" title="初始退避秒">
+        <span class="hint">初始秒</span>
+        <input v-model.number="cfg.backoff.max" type="number" min="1" style="width:70px" title="最大退避/冷却秒">
+        <span class="hint">最大/冷却秒</span>
+        <input v-model.number="cfg.backoff.max_retries" type="number" min="1" style="width:60px" title="连续失败多少次后进入长冷却">
+        <span class="hint">连续失败次数后长冷却（指数退避，防风控）</span>
+      </div>
+      <div class="form-row">
         <label>监听地址</label>
         <input :value="cfg.web.host" disabled style="width:140px">
         <span>:</span>
@@ -266,6 +280,9 @@ onUnmounted(() => {
                   <template v-if="statusFor(i.name).page"> · 页 {{ statusFor(i.name).page }}/{{ statusFor(i.name).source_total || '?' }}</template>
                   <template v-if="statusFor(i.name).collected_rows"> · 已采 {{ statusFor(i.name).collected_rows }} 条</template>
                 </span>
+                <template v-else-if="isBackoff(i.name)">
+                  <span class="red">退避中<template v-if="statusFor(i.name).next_retry_in"> · 下次 {{ fmtEpoch(statusFor(i.name).backoff_until) }}</template><template v-if="statusFor(i.name).fail_count"> · 连续失败 {{ statusFor(i.name).fail_count }} 次</template></span>
+                </template>
                 <template v-else-if="statusFor(i.name).last_collect">
                   <span>最近采集 {{ fmtEpoch(statusFor(i.name).last_collect) }} · 日志 {{ statusFor(i.name).total }} · 访问 {{ statusFor(i.name).access }}</span>
                   <span v-if="statusFor(i.name).last_error" class="red"> · 错误: {{ statusFor(i.name).last_error }}</span>

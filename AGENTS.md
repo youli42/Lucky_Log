@@ -70,7 +70,7 @@ Lucky_Log/
 
 - Lucky API 使用自签名证书：httpx 需 `verify=False`，并抑制告警。
 - Lucky API 无服务端时间过滤：日志增量需客户端游标管理。
-- 目标对高并发有限制：采集需节流 + 重试。
+- 目标对高并发有限制：采集需节流 + 重试；失败进入实例级指数退避（`backoff.base/max/max_retries`），防风控。
 - Web 访问日志在**子代理层**（`/api/webservice/{ruleKey}/{subKey}/logs`），`LogContent` 为内嵌 JSON（`ExtInfo`，含 ClientIP/Host/Method/URL/UserAgent）；规则层为运行日志（如 TLS 错误）。子代理层日志采集后解析入 `access_logs` 表，用于 Web 访问分析（IP/浏览器/OS/设备/路径/归属地）。
 - IP 流量/连接统计来自 `accessdetail` 端点（实时快照：Connections/TrafficIn/TrafficOut/LastAccess），采集器 30s 节流 UPSERT 入 `ip_traffic` 表；与 `access_logs` 的逐请求计数互补，非历史数据。
 - 完整归属地（国家/省/市/ISP）与完整 UA 信息（浏览器/OS/设备 family+version+brand+model）在**查询时富化**（geoip + user-agents），不改 `access_logs` 表结构。

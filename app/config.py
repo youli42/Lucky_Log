@@ -41,6 +41,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "web": {"host": "0.0.0.0", "port": 8666},
     "collect_interval": 10,
     "cleanup": {"enabled": False, "days": 7},
+    "backoff": {"base": 10, "max": 300, "max_retries": 3},
     "instances": [
         {
             "name": "lucky-main",
@@ -92,6 +93,14 @@ class CleanupConfig(pydantic.BaseModel):
     days: int = 7
 
 
+class BackoffConfig(pydantic.BaseModel):
+    """采集失败指数退避。"""
+
+    base: int = 10            # 初始退避秒
+    max: int = 300            # 最大退避/冷却秒
+    max_retries: int = 3      # 连续失败多少次后进入长冷却
+
+
 class WebConfig(pydantic.BaseModel):
     host: str = "0.0.0.0"
     port: int = 8666
@@ -101,6 +110,7 @@ class AppConfig(pydantic.BaseModel):
     web: WebConfig = pydantic.Field(default_factory=WebConfig)
     collect_interval: int = 10
     cleanup: CleanupConfig = pydantic.Field(default_factory=CleanupConfig)
+    backoff: BackoffConfig = pydantic.Field(default_factory=BackoffConfig)
     instances: list[InstanceConfig] = pydantic.Field(default_factory=list)
 
     def enabled_instances(self) -> list[InstanceConfig]:
