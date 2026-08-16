@@ -43,6 +43,12 @@ SINGLE_SOURCES: dict[str, str] = {
     "ipdb": "/api/ipdb/logs",
     "storagemanagement": "/api/storagemanagement/logs",
     "thirdPartyAuthManager": "/api/thirdPartyAuthManager/logs",
+    # Lucky 3.0.0 新增模块
+    "smb": "/api/smb/logs",
+    "coraza": "/api/coraza/logs",
+    "portforward": "/api/portforward/logs",
+    "iconlib": "/api/iconlib/logs",
+    "stun": "/api/stun/logs",
 }
 
 # webservice 按规则源（游标 LogTime）
@@ -199,7 +205,14 @@ class Collector:
         now = time.time()
         if inst.name in self._trees and now - self._tree_ts.get(inst.name, 0) < TREE_REFRESH_SECONDS:
             return self._trees[inst.name]
-        tree = await self._client(inst).fetch_service_tree()
+        try:
+            tree = await self._client(inst).fetch_service_tree()
+        except LuckyError as e:
+            if e.status == 404:
+                self._trees[inst.name] = []
+                self._tree_ts[inst.name] = now
+                return []
+            raise
         self._trees[inst.name] = tree
         self._tree_ts[inst.name] = now
         return tree
@@ -451,6 +464,10 @@ class Collector:
             return inserted, inserted_access
         except LuckyError as e:
             await self.db.save_cursor(inst.name, module, rule_key, sub_key, error=str(e))
+            if e.status == 404:
+                # 模块/资源未启用（404）→ 源不可用，跳过继续，不触发退避
+                logger.debug("[%s] %s/%s 源不可用(404): %s", inst.name, module, sub_key or rule_key, e)
+                return 0, 0
             logger.warning("[%s] %s/%s 采集错误: %s", inst.name, module, sub_key or rule_key, e)
             raise
 
@@ -529,6 +546,9 @@ class Collector:
                 await self.db.upsert_ip_traffic(rows)
                 logger.debug("[%s] %s accessdetail %d IP", inst.name, sub_key, len(rows))
         except LuckyError as e:
+            if e.status == 404:
+                logger.debug("[%s] %s accessdetail 源不可用(404)", inst.name, sub_key)
+                return
             logger.warning("[%s] %s accessdetail 错误: %s", inst.name, sub_key, e)
             raise
 

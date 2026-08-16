@@ -94,7 +94,7 @@ async function poll() {
 function emptyInst() {
   return {
     name: '', host: '', port: '443', base: '/youlilucky',
-    token: '', https: true, enabled: true, modules: ['system', 'webservice', 'docker', 'cron', 'ddns', 'ssl', 'webterminal', 'rclone', 'filebrowser', 'wol'],
+    token: '', https: true, enabled: true, modules: ['system', 'webservice', 'docker', 'cron', 'ddns', 'ssl', 'webterminal', 'rclone', 'filebrowser', 'wol', 'smb'],
   }
 }
 function startNew() {

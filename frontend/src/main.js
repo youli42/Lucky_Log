@@ -7,6 +7,7 @@ import Overview from './views/Overview.vue'
 import Access from './views/Access.vue'
 import ModuleLogs from './views/ModuleLogs.vue'
 import Settings from './views/Settings.vue'
+import Smb from './views/Smb.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -15,6 +16,7 @@ const router = createRouter({
     { path: '/overview', component: Overview },
     { path: '/access', component: Access },
     { path: '/module/:module', component: ModuleLogs },
+    { path: '/smb', component: Smb },
     { path: '/settings', component: Settings },
   ],
 })

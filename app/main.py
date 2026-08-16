@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .collector import Collector
 from .config import ROOT_DIR, load_config
 from .db import Database
-from .routes import access, collect, config as config_routes, logs, meta, stream
+from .routes import access, collect, config as config_routes, logs, meta, smb, stream
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,6 +48,7 @@ app.include_router(logs.router)
 app.include_router(access.router)
 app.include_router(config_routes.router)
 app.include_router(collect.router)
+app.include_router(smb.router)
 app.include_router(stream.router)
 
 _static_dir = ROOT_DIR / "static"

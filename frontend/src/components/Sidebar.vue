@@ -20,6 +20,11 @@ const MODULES = [
   { name: 'ipdb', label: 'IPDB' },
   { name: 'storagemanagement', label: '存储管理' },
   { name: 'thirdPartyAuthManager', label: '三方认证' },
+  { name: 'smb', label: 'SMB', to: '/smb' },
+  { name: 'coraza', label: 'Coraza' },
+  { name: 'portforward', label: '端口转发' },
+  { name: 'iconlib', label: '图标库' },
+  { name: 'stun', label: 'STUN' },
 ]
 const cfg = computed(() => {
   const inst = store.instances.find((i) => i.name === store.instance)
@@ -35,7 +40,7 @@ const cfg = computed(() => {
     <div class="divider"></div>
     <router-link
       v-for="m in cfg" :key="m.name"
-      :to="`/module/${m.name}`" class="item" active-class="active"
+      :to="m.to || `/module/${m.name}`" class="item" active-class="active"
     >{{ m.label }}</router-link>
     <div class="divider"></div>
     <router-link to="/settings" class="item" active-class="active">设置</router-link>

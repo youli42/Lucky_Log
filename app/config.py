@@ -35,6 +35,12 @@ ALL_MODULES = [
     "ipdb",
     "storagemanagement",
     "thirdPartyAuthManager",
+    # Lucky 3.0.0 新增模块
+    "smb",
+    "coraza",
+    "portforward",
+    "iconlib",
+    "stun",
 ]
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -53,7 +59,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "enabled": True,
             "modules": [
                 "system", "webservice", "docker", "cron", "ddns", "ssl",
-                "webterminal", "rclone", "filebrowser", "wol",
+                "webterminal", "rclone", "filebrowser", "wol", "smb",
             ],
         }
     ],

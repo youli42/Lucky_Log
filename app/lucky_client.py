@@ -50,15 +50,29 @@ class LuckyClient:
         self, path: str, params: dict[str, Any] | None = None,
         retries: int = 3, expect_ret0: bool = True,
     ) -> Any:
+        return await self._request("GET", path, params=params, retries=retries, expect_ret0=expect_ret0)
+
+    async def post_json(
+        self, path: str, data: dict[str, Any] | None = None,
+        retries: int = 2, expect_ret0: bool = True,
+    ) -> Any:
+        return await self._request("POST", path, data=data, retries=retries, expect_ret0=expect_ret0)
+
+    async def _request(
+        self, method: str, path: str, params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        retries: int = 3, expect_ret0: bool = True,
+    ) -> Any:
         url = self.url(path)
         last_err: Exception | None = None
         for attempt in range(1, retries + 1):
             async with _GLOBAL_SEMAPHORE:
                 try:
-                    resp = await self._client.get(url, params=params, headers={"OpenToken": self.cfg.token})
+                    req = self._client.build_request(method, url, params=params, json=data, headers={"OpenToken": self.cfg.token})
+                    resp = await self._client.send(req)
                 except httpx.HTTPError as e:
                     last_err = e
-                    logger.warning("[%s] GET %s 网络错误: %s (attempt %d/%d)", self.cfg.name, path, e, attempt, retries)
+                    logger.warning("[%s] %s %s 网络错误: %s (attempt %d/%d)", self.cfg.name, method, path, e, attempt, retries)
                     await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
                     continue
             if resp.status_code != 200:
@@ -66,7 +80,7 @@ class LuckyClient:
                 # 4xx 不重试（模块未启用 404 等），5xx/网络类重试
                 if 400 <= resp.status_code < 500:
                     raise last_err
-                logger.warning("[%s] GET %s HTTP %s (attempt %d/%d)", self.cfg.name, path, resp.status_code, attempt, retries)
+                logger.warning("[%s] %s %s HTTP %s (attempt %d/%d)", self.cfg.name, method, path, resp.status_code, attempt, retries)
                 await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
                 continue
             try:

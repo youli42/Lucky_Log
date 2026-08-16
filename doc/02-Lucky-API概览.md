@@ -1,6 +1,7 @@
 # 02 - Lucky-Admin API 概览
 
-> 目标版本：Lucky-Admin 2.26.2（wanji）。所有接口均为实测验证。
+> 目标版本：Lucky-Admin 2.26.2（wanji）。**目标实例已升级 3.0.0**，本文接口经 3.0.0 实测兼容。
+> 3.0.0 新增模块：`smb`、`logscenter`、`acme`、`securitygroups`、`portforward`、`iconlib`；显示名变更：`webservice→reverseproxy`、`dlnaservice→dlnaserver`、`ipfliter→ipfilter`（**API 路径向后兼容**，旧路径仍可用）。
 
 ## 基础信息
 
@@ -95,6 +96,24 @@ wss://host:port/youlilucky/api/status/ws?Lucky-Admin-Token=TOKEN
 | IP 库 | `/api/ipdb/items` `/api/ipdb/query` `/api/ipdb/logs` |
 | Coraza WAF | `/api/coraza/list` `/api/coraza/logs` |
 | 三方认证 | `/api/thirdPartyAuthManager/list` `/api/thirdPartyAuthManager/logs` |
+
+### SMB（3.0.0 新增）
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/PUT | `/api/smb/configure` | SMB 配置（端口 445、Users、PublicMountList、Signing/Encryption、GuestEnable、MaxConnections、WSDD/MDNS/NBNS 等） |
+| GET | `/api/smb/status` | 服务状态 |
+| GET | `/api/smb/runtime` | 运行时统计（连接/会话/在线用户/句柄/上下行速率/最后传输 + users + connections） |
+| POST | `/api/smb/connections/{connID}/disconnect` | 断开指定连接 |
+| GET | `/api/smb/logs` `/api/smb/lastlogs` | 运行日志（标准结构 + Level） |
+
+### 其他新模块（3.0.0）
+| 模块 | 日志端点 | 备注 |
+|---|---|---|
+| coraza | `/api/coraza/logs` | 多空 |
+| portforward | `/api/portforward/logs` | 多为空 |
+| stun | `/api/stun/logs` | 多为空 |
+| iconlib | `/api/iconlib/logs` | 图标库，偶有日志 |
+| acme / securitygroups / logscenter / ipfilter | 目标当前未启用（404） | 启用后可配模块采集 |
 
 ### WebTerminal
 `/api/webterminal/`：`connections` `sessions` `shells` `security` `logs` `globalshortcuts` `splitlayout`，SFTP 子路径 `/api/webterminal/sftp/{id}/list|read|write|remove|upload|...`。
