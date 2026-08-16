@@ -118,8 +118,9 @@ function onDataRefresh() {
     lastInstance = store.instance
     detail.value = null
     logs.value = ''
+    loadSnapshot()          // ① 切换实例：立即读新实例本地缓存（秒显，零网络等待）
   }
-  refreshAll().catch(() => {})
+  refreshAll()              // ② 后台全量刷新（写缓存），完成后覆盖
 }
 
 // ---- 客户端排序（docker 列表量小，本地排即可） ----
