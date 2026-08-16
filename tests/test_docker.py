@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import AppConfig
+from app.db import Database
 from app.routes import docker as docker_router
 
 CID = "abc123"
@@ -44,16 +45,33 @@ def _app(monkeypatch, calls):
             pass
 
     monkeypatch.setattr(docker_router, "LuckyClient", FakeClient)
+
+    class FakeDB:
+        def __init__(self):
+            self.cache = {}
+
+        async def save_docker_cache(self, instance, payload, fetched_at):
+            self.cache[instance] = (payload, fetched_at)
+
+        async def get_docker_cache(self, instance):
+            if instance not in self.cache:
+                return None
+            payload, fetched_at = self.cache[instance]
+            return {**payload, "instance": instance, "fetched_at": fetched_at}
+
+    db = FakeDB()
     app = FastAPI()
     app.include_router(docker_router.router)
     app.state.config = AppConfig.model_validate({
         "instances": [{"name": "a", "host": "h", "port": "1", "token": "t"}],
     })
-    return app
+    app.state.db = db
+    return app, db
 
 
 def test_docker_overview(monkeypatch):
-    with TestClient(_app(monkeypatch, [])) as c:
+    app, _ = _app(monkeypatch, [])
+    with TestClient(app) as c:
         r = c.get("/api/docker/overview?instance=a")
         assert r.status_code == 200
         assert r.json()["info"]["info"]["ContainersRunning"] == 2
@@ -62,7 +80,8 @@ def test_docker_overview(monkeypatch):
 
 
 def test_docker_containers_merge_stats(monkeypatch):
-    with TestClient(_app(monkeypatch, [])) as c:
+    app, _ = _app(monkeypatch, [])
+    with TestClient(app) as c:
         r = c.get("/api/docker/containers?instance=a")
         body = r.json()
         assert body["total"] == 1
@@ -70,7 +89,8 @@ def test_docker_containers_merge_stats(monkeypatch):
 
 
 def test_docker_detail_and_logs_tail(monkeypatch):
-    with TestClient(_app(monkeypatch, [])) as c:
+    app, _ = _app(monkeypatch, [])
+    with TestClient(app) as c:
         r = c.get(f"/api/docker/container/{CID}?instance=a")
         assert r.json()["stats"]["cpu_percent"] == "3.0"
         assert len(r.json()["processes"]["Processes"]) == 1
@@ -81,7 +101,8 @@ def test_docker_detail_and_logs_tail(monkeypatch):
 
 def test_docker_action_mapping(monkeypatch):
     calls = []
-    with TestClient(_app(monkeypatch, calls)) as c:
+    app, _ = _app(monkeypatch, calls)
+    with TestClient(app) as c:
         for action, suffix in [
             ("start", "start"),
             ("stop", "stop"),
@@ -98,7 +119,40 @@ def test_docker_action_mapping(monkeypatch):
 
 
 def test_docker_lists(monkeypatch):
-    with TestClient(_app(monkeypatch, [])) as c:
+    app, _ = _app(monkeypatch, [])
+    with TestClient(app) as c:
         assert c.get("/api/docker/images?instance=a").json()["images"][0]["RepoTags"] == ["lucky:v3"]
         assert c.get("/api/docker/networks?instance=a").json()["networks"][0]["Name"] == "bridge"
         assert c.get("/api/docker/volumes?instance=a").json()["volumes"] == []
+
+
+def test_docker_snapshot_and_refresh(monkeypatch):
+    app, db = _app(monkeypatch, [])
+    with TestClient(app) as c:
+        # 无缓存时 snapshot 返回空
+        s = c.get("/api/docker/snapshot?instance=a").json()
+        assert s["containers"] == []
+        assert s["fetched_at"] == 0
+        # refresh → 全量拉取并写缓存
+        r = c.post("/api/docker/refresh?instance=a")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["containers"][0]["Id"] == CID
+        assert body["fetched_at"] > 0
+        assert db.cache["a"][0]["images"][0]["RepoTags"] == ["lucky:v3"]
+        # 之后 snapshot 读缓存
+        s = c.get("/api/docker/snapshot?instance=a").json()
+        assert s["containers"][0]["Id"] == CID
+
+
+async def test_docker_cache_db_roundtrip(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    await db.connect()
+    assert await db.get_docker_cache("a") is None
+    await db.save_docker_cache("a", {"info": {"x": 1}, "version": {}, "containers": [{"Id": "1"}],
+                                       "images": [], "networks": [], "volumes": []}, 123)
+    got = await db.get_docker_cache("a")
+    assert got["fetched_at"] == 123
+    assert got["containers"][0]["Id"] == "1"
+    assert got["info"]["x"] == 1
+    await db.close()

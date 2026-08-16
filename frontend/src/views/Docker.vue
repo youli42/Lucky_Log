@@ -10,6 +10,7 @@ const containers = ref([])
 const images = ref([])
 const networks = ref([])
 const volumes = ref([])
+const fetchedAt = ref(0)
 const detail = ref(null)       // {cid, stats, processes}
 const logs = ref('')
 const error = ref('')
@@ -18,6 +19,32 @@ let timer = null
 
 const REFRESH_OPTS = [5, 10, 30, 60, 'off']
 const refreshInterval = ref(Number(localStorage.getItem('lucky_docker_refresh') || 10))
+
+const D = () => ({ instance: store.instance })
+
+async function apiGet(path) {
+  return api(path + (path.includes('?') ? '&' : '?') + new URLSearchParams(D()))
+}
+
+function applySnap(s) {
+  overview.value = s.info ? { info: s.info, version: s.version } : null
+  containers.value = s.containers || []
+  images.value = s.images || []
+  networks.value = s.networks || []
+  volumes.value = s.volumes || []
+  fetchedAt.value = s.fetched_at || 0
+}
+
+function fmtBytes(b) {
+  if (b == null) return '—'
+  const s = String(b).replace(/ B$/, '').trim()
+  const n = parseFloat(s)
+  if (isNaN(n)) return String(b)
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB'
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB'
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB'
+  return b + ' B'
+}
 
 const info = computed(() => overview.value?.info?.info || {})
 const engine = computed(() => {
@@ -33,32 +60,22 @@ const kpis = computed(() => [
   { title: 'Docker', value: engine.value, sub: (info.value.Driver || '—') + ' · 存储驱动', accent: 'var(--red)' },
 ])
 
-function fmtBytes(b) {
-  if (b == null) return '—'
-  const s = String(b).replace(/ B$/, '').trim()
-  const n = parseFloat(s)
-  if (isNaN(n)) return String(b)
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB'
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + ' MB'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB'
-  return b + ' B'
+async function loadSnapshot() {
+  try { applySnap(await apiGet('/api/docker/snapshot')) } catch (e) { error.value = `加载失败: ${e.message}` }
 }
 
-const D = () => ({ instance: store.instance })
-async function apiGet(path) {
-  return api(path + (path.includes('?') ? '&' : '?') + new URLSearchParams(D()))
+async function refreshAll() {
+  try {
+    const s = await api('/api/docker/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(D()),
+    })
+    applySnap(s)
+  } catch (e) {
+    error.value = `刷新失败: ${e.message}`
+  }
 }
-
-async function loadOverview() {
-  overview.value = await apiGet('/api/docker/overview')
-}
-async function loadContainers() {
-  const d = await apiGet('/api/docker/containers')
-  containers.value = d.containers || []
-}
-async function loadImages() { images.value = (await apiGet('/api/docker/images')).images || [] }
-async function loadNetworks() { networks.value = (await apiGet('/api/docker/networks')).networks || [] }
-async function loadVolumes() { volumes.value = (await apiGet('/api/docker/volumes')).volumes || [] }
 
 async function loadDetail(cid) {
   try {
@@ -80,7 +97,7 @@ async function control(cid, action) {
   try {
     const q = new URLSearchParams({ instance: store.instance, action })
     await api(`/api/docker/containers/${encodeURIComponent(cid)}/action?${q}`, { method: 'POST' })
-    await loadContainers()
+    await refreshAll()
     if (detail.value && detail.value.cid === cid) await loadDetail(cid)
   } catch (e) {
     error.value = `操作失败: ${e.message}`
@@ -99,7 +116,7 @@ function restartTimer() {
   const sec = Number(refreshInterval.value)
   if (sec > 0) {
     timer = setInterval(() => {
-      loadContainers().catch(() => {})
+      refreshAll().catch(() => {})
       if (detail.value) { loadDetail(detail.value.cid).catch(() => {}) }
     }, sec * 1000)
   }
@@ -150,16 +167,12 @@ function stateClass(c) {
 }
 
 onMounted(async () => {
-  try {
-    await Promise.all([loadOverview(), loadContainers()])
-  } catch (e) { error.value = `加载失败: ${e.message}` }
+  await loadSnapshot()      // 先读本地缓存，秒显
+  await refreshAll().catch(() => {})  // 再后台全量刷新（写缓存）
   restartTimer()
 })
-watch(tab, (t) => {
-  if (t === 'images' && !images.value.length) loadImages().catch(() => {})
-  if (t === 'networks' && !networks.value.length) loadNetworks().catch(() => {})
-  if (t === 'volumes' && !volumes.value.length) loadVolumes().catch(() => {})
-})
+watch(tab, () => { /* 数据来自快照，无需按 tab 单独加载 */ })
+watch(() => store.refreshTick, () => { refreshAll().catch(() => {}) })
 onBeforeUnmount(() => clearInterval(timer))
 </script>
 
@@ -167,6 +180,7 @@ onBeforeUnmount(() => clearInterval(timer))
   <div>
     <div class="head">
       <h2>Docker 面板</h2>
+      <span v-if="fetchedAt" class="hint">快照更新于 {{ fmtEpoch(fetchedAt) }}</span>
       <span class="hint">刷新</span>
       <select :value="String(refreshInterval)" @change="setRefresh($event.target.value)">
         <option v-for="s in REFRESH_OPTS" :key="s" :value="String(s)">{{ s === 'off' ? '关闭' : s + 's' }}</option>

@@ -1,4 +1,4 @@
-"""Docker 面板 API：只读数据代理 + 容器控制。"""
+"""Docker 面板 API：本地快照缓存 + 实时数据代理 + 容器控制。"""
 from __future__ import annotations
 
 from typing import Optional
@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 
 from ..config import InstanceConfig
+from ..docker_api import fetch_snapshot
 from ..lucky_client import LuckyClient
 
 router = APIRouter(prefix="/api/docker", tags=["docker"])
@@ -29,6 +30,31 @@ def _instance(request: Request, name: str) -> InstanceConfig:
 
 def _client(request: Request, instance: str) -> LuckyClient:
     return LuckyClient(_instance(request, instance))
+
+
+@router.get("/snapshot")
+async def snapshot(request: Request, instance: str):
+    """本地缓存快照（采集器后台预热 / refresh 时更新），进面板秒显。"""
+    return await request.app.state.db.get_docker_cache(instance) or {
+        "instance": instance, "fetched_at": 0,
+        "info": None, "version": None,
+        "containers": [], "images": [], "networks": [], "volumes": [],
+    }
+
+
+@router.post("/refresh")
+async def refresh(request: Request, instance: str):
+    """全量拉取 Docker 数据并写入本地缓存，返回最新快照。"""
+    client = _client(request, instance)
+    try:
+        snap = await fetch_snapshot(client)
+    finally:
+        await client.close()
+    now = int(__import__("time").time())
+    await request.app.state.db.save_docker_cache(instance, snap, now)
+    snap["instance"] = instance
+    snap["fetched_at"] = now
+    return snap
 
 
 @router.get("/overview")

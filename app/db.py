@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS ip_traffic (
   fetched_at  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (instance, sub_key, client_ip)
 );
+CREATE TABLE IF NOT EXISTS docker_cache (
+  instance   TEXT PRIMARY KEY,
+  info       TEXT,
+  version    TEXT,
+  containers TEXT,
+  images     TEXT,
+  networks   TEXT,
+  volumes    TEXT,
+  fetched_at INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS cursors (
   instance   TEXT NOT NULL,
   module     TEXT NOT NULL,
@@ -723,9 +733,53 @@ class Database:
 
     async def purge_instance(self, name: str) -> None:
         """删除实例后清除其全部采集数据（logs/access_logs/ip_traffic/cursors）。"""
-        for table in ("logs", "access_logs", "ip_traffic", "cursors"):
+        for table in ("logs", "access_logs", "ip_traffic", "cursors", "docker_cache"):
             await self._conn.execute(f"DELETE FROM {table} WHERE instance=?", (name,))
         await self._conn.commit()
+
+    # ---------- Docker 缓存（面板本地快照） ----------
+
+    async def save_docker_cache(self, instance: str, payload: dict[str, Any], fetched_at: int) -> None:
+        sql = (
+            "INSERT INTO docker_cache (instance, info, version, containers, images, networks, volumes, fetched_at)"
+            " VALUES (?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(instance) DO UPDATE SET info=excluded.info, version=excluded.version,"
+            " containers=excluded.containers, images=excluded.images, networks=excluded.networks,"
+            " volumes=excluded.volumes, fetched_at=excluded.fetched_at"
+        )
+        await self._conn.execute(sql, (
+            instance,
+            json.dumps(payload.get("info"), ensure_ascii=False),
+            json.dumps(payload.get("version"), ensure_ascii=False),
+            json.dumps(payload.get("containers"), ensure_ascii=False),
+            json.dumps(payload.get("images"), ensure_ascii=False),
+            json.dumps(payload.get("networks"), ensure_ascii=False),
+            json.dumps(payload.get("volumes"), ensure_ascii=False),
+            fetched_at,
+        ))
+        await self._conn.commit()
+
+    async def get_docker_cache(self, instance: str) -> dict[str, Any] | None:
+        row = await self._fetchone("SELECT * FROM docker_cache WHERE instance=?", (instance,))
+        if not row:
+            return None
+
+        def load(k: str) -> Any:
+            try:
+                return json.loads(row[k]) if row[k] else None
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+        return {
+            "instance": instance,
+            "fetched_at": row["fetched_at"],
+            "info": load("info"),
+            "version": load("version"),
+            "containers": load("containers"),
+            "images": load("images"),
+            "networks": load("networks"),
+            "volumes": load("volumes"),
+        }
 
     async def storage_stats(self) -> dict[str, Any]:
         """本地存储占用：DB 文件大小、各表行数/字节估算、每实例数据量。"""

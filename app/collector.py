@@ -13,6 +13,7 @@ from typing import Any
 from .access_parser import parse_access_row
 from .config import AppConfig, InstanceConfig
 from .db import Database
+from .docker_api import fetch_snapshot
 from .lucky_client import LuckyClient, LuckyError
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ PAGE_SIZE = 100
 MAX_PAGES_PER_POLL = 20
 INTER_SOURCE_DELAY = 0.4
 TRAFFIC_INTERVAL = 30  # accessdetail 实时快照刷新节流
+DOCKER_CACHE_INTERVAL = 60  # docker 面板快照后台预热节流
 
 # 模块 → 统一日志端点（游标 LogTime）
 SINGLE_SOURCES: dict[str, str] = {
@@ -374,6 +376,23 @@ class Collector:
                 await asyncio.sleep(INTER_SOURCE_DELAY)
             else:
                 logger.debug("[%s] 忽略未知模块 %s", inst.name, module)
+        if "docker" in modules:
+            await self._refresh_docker_cache(inst)
+
+    async def _refresh_docker_cache(self, inst: InstanceConfig) -> None:
+        """后台预热 Docker 面板快照到本地缓存（60s 节流），进面板秒显。"""
+        now = time.time()
+        throttle_key = (inst.name, "docker_cache")
+        if now - self._traffic_ts.get(throttle_key, 0) < DOCKER_CACHE_INTERVAL:
+            return
+        self._traffic_ts[throttle_key] = now
+        try:
+            snap = await fetch_snapshot(self._client(inst))
+            await self.db.save_docker_cache(inst.name, snap, int(now))
+            logger.debug("[%s] docker 缓存已刷新", inst.name)
+        except LuckyError as e:
+            if e.status != 404:
+                logger.warning("[%s] docker 缓存刷新失败: %s", inst.name, e)
 
     # ---------- 统一分页采集 ----------
 
