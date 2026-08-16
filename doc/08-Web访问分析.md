@@ -65,17 +65,25 @@
 | 返回项 | 口径 |
 |---|---|
 | total / unique_ips / unique_paths | 满足筛选的访问总数 / 独立 IP / 独立路径 |
-| traffic_total / conn_total | 命中 IP 的流量合计 / 连接合计（来自 ip_traffic） |
+| traffic | 流量快照合计 `{connections, traffic_in, traffic_out}`（来自 ip_traffic，非时间筛选） |
 | timeline | 按 hour/day 桶聚合（`(ts_epoch/step)*step`） |
 | top_ips | 访问次数 Top15，附完整归属地 + 流量/连接；用 Top300 IP 聚合出 region_dist 地区分布 |
 | top_paths / browsers / os / devices / device_types / methods / hosts | 对应字段分组计数 |
 
 筛选参数：`instance / rule / sub / host / from_epoch / to_epoch / search`。
 
+## 全部历史 IP（/api/access/ips）
+
+- 按 `client_ip` 去重的**全量** IP 分页列表（默认每页 50），`ORDER BY count DESC`。
+- 每项附：访问次数、归属地（country/province/city/isp/geo_short）、连接/流量快照、最后访问。
+- 支持 `search` 按 IP 前缀/包含筛选；前端点击某 IP 行可直接跳到「访问明细」按该 IP 过滤。
+- 用途：IP 排行图表仅展示 Top15（可读性），全部历史 IP 在此完整查看。
+
 ## API 清单
 
-- `GET /api/access/stats` — 聚合统计（含地区分布、流量合计）。
+- `GET /api/access/stats` — 聚合统计（含地区分布、流量快照合计）。
 - `GET /api/access/logs` — 明细分页（每行附完整归属地 + UA 版本 + 流量）。
+- `GET /api/access/ips` — 全部历史 IP 分页列表。
 - `GET /api/access/export?format=csv|json` — 全字段导出（含归属地 4 项、UA 版本、流量 4 项）。
 
 ## 前端图表映射
@@ -96,5 +104,6 @@
 
 - 默认精简列：时间 | 归属地(省·市) | IP | 方法 | 路径 | 客户端(浏览器·OS)。
 - IP 悬停 Tooltip：完整归属地（国家/省/市/ISP）+ 连接数/流量入出/最后访问。
-- 行点击右侧详情抽屉：请求 / 访问者（含流量）/ 客户端（浏览器与 OS 版本、设备品牌型号、原始 UA）/ 原始 JSON。
-- ⚙ 列显隐配置（localStorage）：17+ 可开关列。
+- 行点击右侧详情抽屉：请求 / 访问者（含流量）/ 客户端（浏览器与 OS 版本、设备品牌型号、原始 UA）。
+- ⚙ 列显隐配置（localStorage）：22 个可开关列。
+- 连接/流量为 accessdetail 快照（连接稳定时基本不变，非每秒实时计数）；访问分析页每 30s 自动刷新并在筛选区标注「更新于 HH:mm:ss」。

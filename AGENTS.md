@@ -35,6 +35,8 @@ python -m app.init_db --geoip
 python -m pytest tests/ -v
 ```
 
+> **前端构建产物已入库**：`static/dist`（`npm run build` 输出）由后端直接托管并被 git 跟踪。改动 `frontend/src` 后需 `cd frontend && npm run build` 并连同 `static/dist` 一起提交，否则生产页面不会更新。
+
 ## 目录结构
 
 ```
