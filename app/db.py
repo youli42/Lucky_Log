@@ -698,3 +698,9 @@ class Database:
         await self._conn.commit()
         await self._conn.execute("VACUUM")
         return cur.rowcount
+
+    async def purge_instance(self, name: str) -> None:
+        """删除实例后清除其全部采集数据（logs/access_logs/ip_traffic/cursors）。"""
+        for table in ("logs", "access_logs", "ip_traffic", "cursors"):
+            await self._conn.execute(f"DELETE FROM {table} WHERE instance=?", (name,))
+        await self._conn.commit()

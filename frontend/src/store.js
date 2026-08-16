@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { api } from './api'
 
 const ranges = { '1h': 3600, '6h': 6 * 3600, '24h': 24 * 3600, '7d': 7 * 86400 }
 
@@ -15,6 +16,15 @@ export const store = reactive({
 
 export function nowEpoch() {
   return Math.floor(Date.now() / 1000)
+}
+
+export async function refreshInstances() {
+  const data = await api('/api/instances')
+  store.instances = (data.instances || []).filter((i) => i.enabled)
+  if (store.instance && !store.instances.some((i) => i.name === store.instance)) {
+    store.instance = store.instances[0] ? store.instances[0].name : ''
+  }
+  if (!store.instances.length) store.instance = ''
 }
 
 function applyRange() {

@@ -117,3 +117,12 @@ def load_config(path: Path | str | None = None) -> AppConfig:
     else:
         data = json.loads(cfg_path.read_text(encoding="utf-8"))
     return AppConfig.model_validate(data)
+
+
+def save_config(cfg: AppConfig, path: Path | str | None = None) -> None:
+    """将当前配置写回 config.json（设置界面保存用）。"""
+    cfg_path = Path(path) if path else CONFIG_PATH
+    payload = json.loads(cfg.model_dump_json())
+    cfg_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )

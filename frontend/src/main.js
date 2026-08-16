@@ -6,6 +6,7 @@ import App from './App.vue'
 import Overview from './views/Overview.vue'
 import Access from './views/Access.vue'
 import ModuleLogs from './views/ModuleLogs.vue'
+import Settings from './views/Settings.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -14,6 +15,7 @@ const router = createRouter({
     { path: '/overview', component: Overview },
     { path: '/access', component: Access },
     { path: '/module/:module', component: ModuleLogs },
+    { path: '/settings', component: Settings },
   ],
 })
 

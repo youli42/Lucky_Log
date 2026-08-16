@@ -37,6 +37,8 @@ const cfg = computed(() => {
       v-for="m in cfg" :key="m.name"
       :to="`/module/${m.name}`" class="item" active-class="active"
     >{{ m.label }}</router-link>
+    <div class="divider"></div>
+    <router-link to="/settings" class="item" active-class="active">设置</router-link>
   </nav>
 </template>
 

@@ -120,8 +120,44 @@ class Collector:
         self._subscribers: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
         self._running = False
+        self._lock = asyncio.Lock()
         # 状态展示：instance → {last_collect, last_error}
         self.status: dict[str, dict[str, Any]] = {}
+
+    def _conn_params(self, inst: InstanceConfig) -> tuple:
+        return (inst.host, inst.port, inst.base, inst.https, inst.token)
+
+    async def sync_instances(self) -> None:
+        """配置保存后热同步：关闭/移除连接参数变化或被删除实例的客户端与服务树。
+
+        新增实例无需处理 —— _collect_once 每轮重读 self.cfg.enabled_instances()。
+        """
+        async with self._lock:
+            by_name = {i.name: i for i in self.cfg.instances}
+            keep: dict[str, LuckyClient] = {}
+            to_drop: list[LuckyClient] = []
+            for name, client in self._clients.items():
+                inst = by_name.get(name)
+                if inst is not None and self._conn_params(inst) == self._conn_params_by_client(client):
+                    keep[name] = client
+                else:
+                    to_drop.append(client)
+            self._clients = keep
+            for name in list(self._trees):
+                if name not in by_name:
+                    self._trees.pop(name, None)
+                    self._tree_ts.pop(name, None)
+            for name in list(self.status):
+                if name not in by_name:
+                    self.status.pop(name, None)
+        for client in to_drop:
+            await client.close()
+
+    def _conn_params_by_client(self, client: LuckyClient) -> tuple:
+        return (
+            client.cfg.host, client.cfg.port, client.cfg.base,
+            client.cfg.https, client.cfg.token,
+        )
 
     # ---------- 生命周期 ----------
 
