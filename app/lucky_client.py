@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 _SSL_WARN_MSG = "Enable fallback certificate verification"  # 抑制关键字
 
+# 全局并发信号量：无论几个实例/手动任务并发，对 Lucky 目标的 HTTP 请求并发恒 ≤2
+_GLOBAL_SEMAPHORE = asyncio.Semaphore(2)
+
 
 class LuckyError(Exception):
     """Lucky API 调用异常（HTTP/网络/业务码）。"""
@@ -32,7 +35,6 @@ class LuckyClient:
             timeout=httpx.Timeout(10.0, connect=8.0),
             follow_redirects=True,
         )
-        self._semaphore = asyncio.Semaphore(2)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -47,7 +49,7 @@ class LuckyClient:
         url = self.url(path)
         last_err: Exception | None = None
         for attempt in range(1, retries + 1):
-            async with self._semaphore:
+            async with _GLOBAL_SEMAPHORE:
                 try:
                     resp = await self._client.get(url, params=params, headers={"OpenToken": self.cfg.token})
                 except httpx.HTTPError as e:

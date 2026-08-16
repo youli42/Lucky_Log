@@ -56,6 +56,20 @@ def test_parse_access_row_non_web():
     assert parse_access_row("inst", rec) is None
 
 
+def test_parse_access_row_empty_ua():
+    """UA 为空/缺失不应崩溃（曾导致 _classify_device 对 None 访问 is_bot）。"""
+    rec = _access_rec(ua="")
+    row = parse_access_row("inst", rec)
+    assert row is not None
+    assert row["device_type"] == "unknown"
+    rec2 = {"LogContent": json.dumps({
+        "ExtInfo": {"ClientIP": "1.2.3.4", "Host": "h", "Method": "GET", "URL": "/", "UserAgent": ""},
+        "level": "info", "msg": "x",
+    }), "LogTime": "2026/08/16 03:00:00"}
+    row2 = parse_access_row("inst", rec2)
+    assert row2["device_type"] == "unknown"
+
+
 def test_geoip_private():
     assert province("127.0.0.1") == "内网/保留"
     assert province("192.168.1.1") == "内网/保留"

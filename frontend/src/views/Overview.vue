@@ -25,11 +25,21 @@ const kpis = computed(() => [
   { title: '日志总量', value: overview.value?.total_logs ?? 0, sub: '本地库内全部日志', accent: 'var(--accent)' },
   { title: 'Web 访问', value: overview.value?.access_total ?? 0, sub: '访问日志条数', accent: 'var(--green)' },
   { title: '活跃服务', value: overview.value?.active_services ?? 0, sub: '有日志的服务', accent: 'var(--yellow)' },
-  { title: '采集状态', value: inst.value?.last_collect ? fmt(inst.value.last_collect) : '—', sub: inst.value?.last_error || '运行正常', accent: inst.value?.last_error ? 'var(--red)' : 'var(--green)' },
+  { title: '本地数据', value: overview.value?.db_bytes != null ? fmtBytes(overview.value.db_bytes) : '—', sub: 'SQLite 文件大小', accent: 'var(--red)' },
+  { title: '采集状态', value: inst.value?.collecting ? '采集中' : (inst.value?.last_collect ? fmt(inst.value.last_collect) : '—'),
+    sub: inst.value?.collecting ? (inst.value.current || '正在采集…') : (inst.value?.last_error || '运行正常'),
+    accent: inst.value?.collecting ? 'var(--yellow)' : (inst.value?.last_error ? 'var(--red)' : 'var(--green)') },
 ])
 function fmt(ts) {
   const d = new Date(ts * 1000); const p = (n) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+function fmtBytes(b) {
+  if (b == null) return '—'
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
+  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
+  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
+  return b + ' B'
 }
 
 const moduleChart = computed(() => {

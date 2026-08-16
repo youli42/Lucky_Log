@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { api, qp } from '../api'
 import { refreshInstances, store } from '../store'
 import { fmtEpoch } from '../api'
@@ -7,6 +7,7 @@ import { fmtEpoch } from '../api'
 const cfg = ref(null)
 const allModules = ref([])
 const instStats = ref([])
+const storage = ref(null)
 const editing = ref(null)
 const isNew = ref(false)
 const testing = ref(false)
@@ -16,6 +17,16 @@ const purgeDel = ref(false)
 const saved = ref(false)
 const err = ref('')
 let savedTimer = null
+let pollTimer = null
+let storageTimer = null
+
+function fmtBytes(b) {
+  if (b == null) return '—'
+  if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'
+  if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB'
+  if (b >= 1e3) return (b / 1e3).toFixed(1) + ' KB'
+  return b + ' B'
+}
 
 const MODULE_LABELS = {
   system: 'System', webservice: 'Web (WebService)', docker: 'Docker', cron: 'Cron',
@@ -33,10 +44,42 @@ async function load() {
   cfg.value = c.config
   allModules.value = c.modules || []
   instStats.value = inst.instances || []
+  await loadStorage()
+}
+
+async function loadStorage() {
+  try {
+    storage.value = await api('/api/storage')
+  } catch { /* ignore */ }
 }
 
 function statusFor(name) {
   return instStats.value.find((i) => i.name === name) || {}
+}
+
+async function collectInstance(name) {
+  try {
+    await api(`/api/collect?instance=${encodeURIComponent(name)}`, { method: 'POST' })
+    await poll()
+  } catch (e) {
+    err.value = `采集触发失败: ${e.message}`
+  }
+}
+
+async function collectAllInst() {
+  try {
+    await api('/api/collect/all', { method: 'POST' })
+    await poll()
+  } catch (e) {
+    err.value = `采集触发失败: ${e.message}`
+  }
+}
+
+async function poll() {
+  try {
+    const inst = await api('/api/instances')
+    instStats.value = inst.instances || []
+  } catch { /* ignore */ }
 }
 
 function emptyInst() {
@@ -154,6 +197,13 @@ async function doDelete() {
 onMounted(async () => {
   await load()
   await refreshInstances()
+  pollTimer = setInterval(poll, 5000)
+  storageTimer = setInterval(loadStorage, 15000)
+})
+onUnmounted(() => {
+  clearInterval(pollTimer)
+  clearInterval(storageTimer)
+  clearTimeout(savedTimer)
 })
 </script>
 
@@ -192,7 +242,10 @@ onMounted(async () => {
     <div class="card">
       <div class="card-head">
         <h3>实例（Lucky 地址 / Token / 模块）</h3>
-        <button @click="startNew">+ 新增实例</button>
+        <div class="head-actions">
+          <button @click="collectAllInst">采集全部</button>
+          <button @click="startNew">+ 新增实例</button>
+        </div>
       </div>
       <table class="inst-table">
         <thead>
@@ -206,19 +259,52 @@ onMounted(async () => {
             <td>{{ i.enabled ? '是' : '否' }}</td>
             <td>{{ (i.modules || []).length }}</td>
             <td class="st">
-              <span v-if="!i.enabled" class="muted">未启用</span>
+              <template v-if="!i.enabled"><span class="muted">未启用</span></template>
               <template v-else>
-                <span v-if="statusFor(i.name).last_collect">最近采集 {{ fmtEpoch(statusFor(i.name).last_collect) }} · 库内 {{ statusFor(i.name).total }}</span>
-                <span v-if="statusFor(i.name).last_error" class="red"> · 错误: {{ statusFor(i.name).last_error }}</span>
-                <span v-if="!statusFor(i.name).last_collect && !statusFor(i.name).last_error" class="muted">等待首次采集…</span>
+                <span v-if="statusFor(i.name).collecting" class="busy">
+                  采集中<template v-if="statusFor(i.name).current"> · {{ statusFor(i.name).current }}</template>
+                  <template v-if="statusFor(i.name).page"> · 页 {{ statusFor(i.name).page }}/{{ statusFor(i.name).source_total || '?' }}</template>
+                  <template v-if="statusFor(i.name).collected_rows"> · 已采 {{ statusFor(i.name).collected_rows }} 条</template>
+                </span>
+                <template v-else-if="statusFor(i.name).last_collect">
+                  <span>最近采集 {{ fmtEpoch(statusFor(i.name).last_collect) }} · 日志 {{ statusFor(i.name).total }} · 访问 {{ statusFor(i.name).access }}</span>
+                  <span v-if="statusFor(i.name).last_error" class="red"> · 错误: {{ statusFor(i.name).last_error }}</span>
+                </template>
+                <template v-else>
+                  <span class="muted">等待首次采集…</span>
+                  <span v-if="statusFor(i.name).last_error" class="red"> · 错误: {{ statusFor(i.name).last_error }}</span>
+                </template>
               </template>
             </td>
-            <td>
+            <td class="ops">
+              <button :disabled="statusFor(i.name).collecting" @click="collectInstance(i.name)">{{ statusFor(i.name).collecting ? '采集中…' : '立即采集' }}</button>
               <button @click="startEdit(i)">编辑</button>
               <button class="danger" @click="confirmDel = i.name; purgeDel = false">删除</button>
             </td>
           </tr>
           <tr v-if="!cfg.instances?.length"><td colspan="7" class="muted">暂无实例，点击「+ 新增实例」添加</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 本地数据 -->
+    <div class="card">
+      <div class="card-head"><h3>本地数据</h3><span class="hint">DB 文件 {{ fmtBytes(storage?.db_bytes) }} · 每 15s 刷新</span></div>
+      <table class="inst-table">
+        <thead><tr><th>表</th><th>行数</th><th>估算字节</th></tr></thead>
+        <tbody>
+          <tr v-for="(v, k) in storage?.tables || {}" :key="k">
+            <td class="mono">{{ k }}</td><td>{{ v.rows }}</td><td>{{ fmtBytes(v.bytes) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="inst-table">
+        <thead><tr><th>实例</th><th>日志</th><th>访问</th><th>流量 IP</th><th>估算字节</th></tr></thead>
+        <tbody>
+          <tr v-for="p in storage?.per_instance || []" :key="p.name">
+            <td>{{ p.name }}</td><td>{{ p.logs }}</td><td>{{ p.access }}</td><td>{{ p.traffic_ips }}</td><td>{{ fmtBytes(p.bytes) }}</td>
+          </tr>
+          <tr v-if="!storage?.per_instance?.length"><td colspan="5" class="muted">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -282,7 +368,10 @@ onMounted(async () => {
 .err { color: var(--red); margin-bottom: 10px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.head-actions { display: flex; gap: 8px; }
 .card h3, .card-head h3 { margin: 0; font-size: 13px; color: var(--muted); }
+.busy { color: var(--yellow); }
+.ops { white-space: nowrap; }
 .form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .form-row label { width: 90px; color: var(--muted); }
 .form-row .hint { color: var(--muted); font-size: 11px; }

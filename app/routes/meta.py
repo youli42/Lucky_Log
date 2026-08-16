@@ -1,6 +1,7 @@
 """实例 / 服务树 / 模块 / 统计 API。"""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -41,8 +42,15 @@ async def list_instances(request: Request):
         if st.get("last_collect"):
             info["last_collect"] = st["last_collect"]
         info["last_error"] = st.get("last_error")
+        info["collecting"] = st.get("collecting", False)
+        info["current"] = st.get("current", "")
+        info["page"] = st.get("page", 0)
+        info["source_total"] = st.get("total", 0)
+        info["collected_rows"] = st.get("collected_rows", 0)
+        info["started_at"] = st.get("started_at", 0)
         stats = await db.instance_stats(inst.name)
         info["total"] = stats["total"]
+        info["access"] = await db.access_instance_total(inst.name)
         out.append(info)
     return {"instances": out}
 
@@ -67,10 +75,12 @@ async def overview(
         for inst in request.app.state.config.enabled_instances():
             total_logs += (await db.instance_stats(inst.name))["total"]
             access_total += await db.access_instance_total(inst.name)
+    db_bytes = Path(db.path).stat().st_size if Path(db.path).exists() else 0
     return {
         "total_logs": total_logs,
         "access_total": access_total,
         "active_services": len(by_service),
+        "db_bytes": db_bytes,
         "by_module": by_module,
         "timeline": timeline,
         "by_service": by_service,

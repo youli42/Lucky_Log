@@ -704,3 +704,41 @@ class Database:
         for table in ("logs", "access_logs", "ip_traffic", "cursors"):
             await self._conn.execute(f"DELETE FROM {table} WHERE instance=?", (name,))
         await self._conn.commit()
+
+    async def storage_stats(self) -> dict[str, Any]:
+        """本地存储占用：DB 文件大小、各表行数/字节估算、每实例数据量。"""
+        db_bytes = Path(self.path).stat().st_size if Path(self.path).exists() else 0
+        tables: dict[str, Any] = {}
+
+        async def table_info(name: str, len_expr: str) -> None:
+            row = await self._fetchone(
+                f"SELECT COUNT(*) AS c, COALESCE(SUM({len_expr}),0) AS b FROM {name}"
+            )
+            tables[name] = {"rows": row["c"], "bytes": row["b"]}
+
+        await table_info("logs", "LENGTH(content) + LENGTH(raw_json) + LENGTH(ts_text)")
+        await table_info("access_logs", "LENGTH(path) + LENGTH(ua) + LENGTH(client_ip)")
+        await table_info("ip_traffic", "LENGTH(client_ip)")
+        await table_info("cursors", "LENGTH(module) + LENGTH(rule_key)")
+
+        logs_by = await self._fetchall(
+            "SELECT instance, COUNT(*) AS c, COALESCE(SUM(LENGTH(content) + LENGTH(raw_json)),0) AS b "
+            "FROM logs GROUP BY instance"
+        )
+        access_by = {r["instance"]: r["c"] for r in await self._fetchall(
+            "SELECT instance, COUNT(*) AS c FROM access_logs GROUP BY instance"
+        )}
+        traffic_by = {r["instance"]: r["c"] for r in await self._fetchall(
+            "SELECT instance, COUNT(*) AS c FROM ip_traffic GROUP BY instance"
+        )}
+        per_instance = []
+        for r in sorted(logs_by, key=lambda x: -x["b"]):
+            name = r["instance"]
+            per_instance.append({
+                "name": name,
+                "logs": r["c"],
+                "access": access_by.get(name, 0),
+                "traffic_ips": traffic_by.get(name, 0),
+                "bytes": r["b"],
+            })
+        return {"db_bytes": db_bytes, "tables": tables, "per_instance": per_instance}

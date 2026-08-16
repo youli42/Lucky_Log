@@ -121,7 +121,9 @@ class Collector:
         self._task: asyncio.Task | None = None
         self._running = False
         self._lock = asyncio.Lock()
-        # 状态展示：instance → {last_collect, last_error}
+        self._instance_sem = asyncio.Semaphore(2)
+        self._collecting: set[str] = set()
+        # 状态展示：instance → {last_collect, last_error, collecting, current, ...}
         self.status: dict[str, dict[str, Any]] = {}
 
     def _conn_params(self, inst: InstanceConfig) -> tuple:
@@ -203,6 +205,29 @@ class Collector:
 
     # ---------- 主循环 ----------
 
+    @staticmethod
+    def _default_status() -> dict[str, Any]:
+        return {
+            "last_collect": 0, "last_error": None, "collecting": False,
+            "current": "", "page": 0, "total": 0, "collected_rows": 0,
+            "started_at": 0,
+        }
+
+    def _status(self, inst: InstanceConfig) -> dict[str, Any]:
+        return self.status.setdefault(inst.name, self._default_status())
+
+    def _set_current(self, inst: InstanceConfig, current: str, page: int = 0, total: int = 0) -> None:
+        st = self._status(inst)
+        st["current"] = current
+        if page:
+            st["page"] = page
+        if total:
+            st["total"] = total
+
+    def _add_collected(self, inst: InstanceConfig, n: int) -> None:
+        st = self._status(inst)
+        st["collected_rows"] = st.get("collected_rows", 0) + n
+
     async def _run_loop(self) -> None:
         interval = max(2, self.cfg.collect_interval)
         logger.info("采集器启动，间隔 %ss", interval)
@@ -215,19 +240,55 @@ class Collector:
             # 固定间隔轮询，给目标留出喘息空间；一轮超时也不连续补跑
             await asyncio.sleep(interval)
 
+    async def _run_instance(self, inst: InstanceConfig) -> None:
+        """采集单个实例（防重入）：记录进度与结果。"""
+        if inst.name in self._collecting:
+            return
+        self._collecting.add(inst.name)
+        st = self._status(inst)
+        st["collecting"] = True
+        st["started_at"] = int(time.time())
+        st["current"] = ""
+        st["page"] = 0
+        st["total"] = 0
+        st["collected_rows"] = 0
+        try:
+            await self._collect_instance(inst)
+            st["last_collect"] = int(time.time())
+            st["last_error"] = None
+        except Exception as e:  # noqa: BLE001
+            logger.exception("[%s] 采集失败: %s", inst.name, e)
+            st["last_error"] = str(e)
+        finally:
+            st["collecting"] = False
+            st["current"] = ""
+            self._collecting.discard(inst.name)
+
     async def _collect_once(self) -> None:
         instances = self.cfg.enabled_instances()
-        for inst in instances:
-            st = self.status.setdefault(
-                inst.name, {"last_collect": 0, "last_error": None}
-            )
-            try:
-                await self._collect_instance(inst)
-                st["last_collect"] = int(time.time())
-                st["last_error"] = None
-            except Exception as e:  # noqa: BLE001
-                logger.exception("[%s] 采集失败: %s", inst.name, e)
-                st["last_error"] = str(e)
+        async def guarded(inst: InstanceConfig) -> None:
+            async with self._instance_sem:
+                await self._run_instance(inst)
+        await asyncio.gather(*(guarded(i) for i in instances))
+
+    def collect_now(self, name: str) -> bool:
+        """立即采集指定实例（异步任务）。已在采/不存在返回 False。"""
+        inst = next((i for i in self.cfg.instances if i.name == name), None)
+        if inst is None or not inst.enabled:
+            return False
+        if name in self._collecting:
+            return False
+        asyncio.create_task(self._run_instance(inst))
+        return True
+
+    def collect_all(self) -> int:
+        """立即采集全部启用实例，返回新启动的任务数。"""
+        started = 0
+        for inst in self.cfg.enabled_instances():
+            if inst.name not in self._collecting:
+                asyncio.create_task(self._run_instance(inst))
+                started += 1
+        return started
 
     async def _collect_instance(self, inst: InstanceConfig) -> None:
         modules = set(inst.modules or SINGLE_SOURCES.keys())
@@ -257,6 +318,10 @@ class Collector:
         new_rows: list[dict[str, Any]] = []
         access_rows: list[dict[str, Any]] = []
         newest = old
+        label = module
+        if rule_name or sub_name:
+            label += "/" + (sub_name or rule_name)
+        self._set_current(inst, label)
         try:
             page = 1
             total = None
@@ -264,6 +329,7 @@ class Collector:
                 data = await client.get_log_page(path, page, PAGE_SIZE)
                 if total is None:
                     total = data["total"]
+                self._set_current(inst, label, page=page, total=total)
                 logs = data["logs"]
                 if not logs:
                     break
@@ -317,6 +383,8 @@ class Collector:
             )
             if inserted:
                 self.broadcast(new_rows)
+            if inserted:
+                self._add_collected(inst, inserted)
             if inserted_access or inserted:
                 logger.debug(
                     "[%s] %s/%s 新增日志 %d 访问 %d", inst.name, module, sub_key or rule_key, inserted, inserted_access
@@ -340,6 +408,7 @@ class Collector:
         for rule in tree:
             rule_key = rule.get("Key") or ""
             rule_name = rule.get("Name") or ""
+            self._set_current(inst, f"webservice/{rule_name or rule_key}")
             await self._poll_unified(
                 inst, "webservice", BY_RULE_SOURCE.format(ruleKey=rule_key),
                 rule_key=rule_key, rule_name=rule_name,
@@ -348,6 +417,7 @@ class Collector:
             for sub in rule.get("SubRuleList") or []:
                 sub_key = sub.get("Key") or ""
                 sub_name = sub.get("Name") or ""
+                self._set_current(inst, f"webservice/{rule_name or rule_key}/{sub_name or sub_key}")
                 await self._poll_unified(
                     inst, "webservice", SUB_RULE_SOURCE.format(ruleKey=rule_key, subKey=sub_key),
                     rule_key=rule_key, rule_name=rule_name,
@@ -355,17 +425,19 @@ class Collector:
                     build_access=True,
                 )
                 await asyncio.sleep(INTER_SOURCE_DELAY)
-                await self._poll_accessdetail(inst, rule_key, sub_key)
+                await self._poll_accessdetail(inst, rule_key, sub_key, rule_name, sub_name)
 
     # ---------- IP 流量快照（accessdetail） ----------
 
-    async def _poll_accessdetail(self, inst: InstanceConfig, rule_key: str, sub_key: str) -> None:
+    async def _poll_accessdetail(self, inst: InstanceConfig, rule_key: str, sub_key: str,
+                                 rule_name: str = "", sub_name: str = "") -> None:
         """轮询子代理 accessdetail，UPSERT 入 ip_traffic；30s 节流。"""
         now = time.time()
         throttle_key = (inst.name, sub_key)
         if now - self._traffic_ts.get(throttle_key, 0) < TRAFFIC_INTERVAL:
             return
         self._traffic_ts[throttle_key] = now
+        self._set_current(inst, f"accessdetail: {sub_name or sub_key}")
         rows: list[dict[str, Any]] = []
         try:
             page = 1

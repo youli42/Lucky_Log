@@ -32,7 +32,13 @@ def parse_extinfo(content: str) -> dict[str, Any] | None:
 
 
 def _classify_device(parsed: Any, ua: str) -> str:
-    if parsed.is_bot or _BOT_RE.search(ua):
+    if not ua:
+        return "unknown"
+    if _BOT_RE.search(ua):
+        return "bot"
+    if parsed is None:
+        return "unknown"
+    if parsed.is_bot:
         return "bot"
     if parsed.is_tablet:
         return "tablet"
@@ -40,8 +46,6 @@ def _classify_device(parsed: Any, ua: str) -> str:
         return "mobile"
     if parsed.is_pc:
         return "desktop"
-    if not ua:
-        return "unknown"
     return "unknown"
 
 
