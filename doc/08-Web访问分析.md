@@ -2,19 +2,31 @@
 
 ## 数据来源
 
-子代理层日志 `/api/webservice/{ruleKey}/{subKey}/logs`，`LogContent` 为内嵌 JSON（`ExtInfo`）：
+子代理层日志 `/api/webservice/{ruleKey}/{subKey}/logs`，`LogContent` 为内嵌 JSON。
+Lucky 存在**两种格式**（解析器向后兼容）：
 
-```json
-{"ExtInfo":{"ClientIP":"203.0.113.1","Host":"www.example.com",
-  "Method":"GET","URL":"/favicon.ico",
-  "UserAgent":"Mozilla/5.0 (Linux; Android 11; V2068A) ... VivoBrowser/30.3.0.0"}}
-```
+- 旧版（约 2026-08-16 前）：`ExtInfo` 包裹，大写下划线字段
+
+  ```json
+  {"ExtInfo":{"ClientIP":"203.0.113.1","Host":"www.example.com",
+    "Method":"GET","URL":"/favicon.ico",
+    "UserAgent":"Mozilla/5.0 (Linux; Android 11; V2068A) ... VivoBrowser/30.3.0.0"}}
+  ```
+
+- 新版（约 2026-08-16 后）：扁平、小写字段、无 `ExtInfo` 包裹
+
+  ```json
+  {"client_ip":"10.10.10.9","host":"10.10.10.2:10002","method":"GET",
+   "url":"/api/setup/status","user_agent":"","event":"[10.10.10.2]","level":"info"}
+  ```
 
 采集器对每条子代理层日志调用 `access_parser.parse_access_row`：
-1. `LogContent` → JSON → `ExtInfo`；缺 `ClientIP` 则跳过（非访问日志）。
-2. `UserAgent` 用 `user-agents` 解析 → `browser / os / device / device_type`。
+1. `LogContent` → JSON；优先取 `ExtInfo`，否则按扁平结构解析（字段大小写兼容 `ClientIP`/`client_ip` 等）；缺 `client_ip` 则跳过（非访问日志）。
+2. `UserAgent`/`user_agent` 用 `user-agents` 解析 → `browser / os / device / device_type`。
 3. `device_type` 分类：`bot / mobile / tablet / desktop / unknown`（含 UA 关键词兜底）。
 4. 结构化行写入 `access_logs` 表。
+
+> 格式切换（~2026-08-16）导致切换前的历史访问日志缺失，可用 `python -m app.backfill_access` 从 `logs` 表重新解析回填 `access_logs`。
 
 > 局限：日志无 `Referer` 与状态码，因此「访问来源类型」按**设备类型 + Host 域名**分组，而非搜索引擎/外链来源。
 

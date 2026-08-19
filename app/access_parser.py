@@ -22,7 +22,14 @@ _ua_parse_cached = lru_cache(maxsize=8192)(ua_parse)
 
 
 def parse_extinfo(content: str) -> dict[str, Any] | None:
-    """从 LogContent 解析出 ExtInfo；非 Web 访问日志返回 None。"""
+    """从 LogContent 解析出访问信息字典；非 Web 访问日志返回 None。
+
+    兼容 Lucky 子代理层两种日志格式（实测均有，需向后兼容）：
+
+    - 旧版（约 2026-08-16 前）：``{"ExtInfo":{"ClientIP","Host","Method","URL","UserAgent"}, ...}``
+    - 新版（约 2026-08-16 后）：``{"client_ip","host","method","url","user_agent","event", ...}``
+      扁平、小写、无 ``ExtInfo`` 包裹。
+    """
     if not content:
         return None
     try:
@@ -31,10 +38,13 @@ def parse_extinfo(content: str) -> dict[str, Any] | None:
         return None
     if not isinstance(obj, dict):
         return None
-    ext = obj.get("ExtInfo")
-    if not isinstance(ext, dict):
-        return None
-    return ext
+    # 旧版：ExtInfo 包裹
+    if isinstance(obj.get("ExtInfo"), dict):
+        return obj["ExtInfo"]
+    # 新版：扁平结构（含小写 client_ip/method/url/host/user_agent 之一）
+    if any(k in obj for k in ("client_ip", "host", "method", "url", "user_agent")):
+        return obj
+    return None
 
 
 def _classify_device(parsed: Any, ua: str) -> str:
@@ -65,14 +75,26 @@ def parse_access_row(
     sub_name: str = "",
     fetched_at: int | None = None,
 ) -> dict[str, Any] | None:
-    """原始日志行 → access_logs 行；无法解析返回 None。"""
+    """原始日志行 → access_logs 行；无法解析返回 None。
+
+    访问字段兼容新旧两种大小写（ClientIP/Host/Method/URL/UserAgent 与
+    client_ip/host/method/url/user_agent）。
+    """
     ext = parse_extinfo(rec.get("LogContent") or "")
     if not ext:
         return None
-    client_ip = ext.get("ClientIP") or ""
+
+    def pick(*keys: str) -> str:
+        for k in keys:
+            v = ext.get(k)
+            if v:
+                return str(v)
+        return ""
+
+    client_ip = pick("ClientIP", "client_ip")
     if not client_ip:
         return None
-    ua = ext.get("UserAgent") or ""
+    ua = pick("UserAgent", "user_agent")
     parsed = _ua_parse_cached(ua) if ua else None
     if parsed is not None:
         browser = parsed.browser.family or ""
@@ -88,12 +110,12 @@ def parse_access_row(
         "rule_name": rule_name,
         "sub_key": sub_key,
         "sub_name": sub_name,
-        "host": ext.get("Host") or "",
+        "host": pick("Host", "host"),
         "ts_epoch": parse_lucky_ts(rec.get("LogTime")),
         "ts_text": rec.get("LogTime") or "",
         "client_ip": client_ip,
-        "method": ext.get("Method") or "",
-        "path": ext.get("URL") or "",
+        "method": pick("Method", "method"),
+        "path": pick("URL", "url"),
         "ua": ua,
         "browser": browser,
         "os": os_family,

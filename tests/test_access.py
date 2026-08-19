@@ -21,12 +21,30 @@ def _access_rec(ip="198.51.100.7", host="omo.example.com", url="/favicon.ico", m
     }
 
 
+def _access_rec_flat(ip="198.51.100.7", host="10.10.10.2:10002", url="/api/setup/status",
+                     method="GET", ua=UA_PC, event="[10.10.10.2]"):
+    return {
+        "LogContent": json.dumps({
+            "client_ip": ip, "host": host, "method": method, "url": url,
+            "user_agent": ua, "event": event, "level": "info",
+        }),
+        "LogTime": "2026/08/19 23:00:00", "ShowTime": True,
+    }
+
+
 def test_parse_extinfo():
     ext = parse_extinfo(_access_rec()["LogContent"])
     assert ext["ClientIP"] == "198.51.100.7"
     assert ext["URL"] == "/favicon.ico"
     assert parse_extinfo("not json") is None
     assert parse_extinfo(json.dumps({"no": "extinfo"})) is None
+
+
+def test_parse_extinfo_flat():
+    ext = parse_extinfo(_access_rec_flat()["LogContent"])
+    assert ext["client_ip"] == "198.51.100.7"
+    assert ext["url"] == "/api/setup/status"
+    assert ext["host"] == "10.10.10.2:10002"
 
 
 def test_parse_access_row_mobile():
@@ -53,6 +71,26 @@ def test_parse_access_row_bot():
 
 def test_parse_access_row_non_web():
     rec = {"LogContent": "plain text log", "LogTime": "2026/08/16 03:00:00"}
+    assert parse_access_row("inst", rec) is None
+
+
+def test_parse_access_row_flat_format():
+    """Lucky ~2026-08-16 后的扁平小写格式（无 ExtInfo 包裹）应被正确解析。"""
+    rec = _access_rec_flat(ua=UA_MOBILE)
+    row = parse_access_row("inst", rec, rule_key="rk", sub_key="sk")
+    assert row is not None
+    assert row["client_ip"] == "198.51.100.7"
+    assert row["method"] == "GET"
+    assert row["path"] == "/api/setup/status"
+    assert row["host"] == "10.10.10.2:10002"
+    assert row["browser"] == "VivoBrowser"
+    assert row["device_type"] == "mobile"
+    assert row["ts_text"] == "2026/08/19 23:00:00"
+
+
+def test_parse_access_row_flat_missing_ip():
+    """扁平格式缺 client_ip 应跳过。"""
+    rec = _access_rec_flat(ip="")
     assert parse_access_row("inst", rec) is None
 
 
